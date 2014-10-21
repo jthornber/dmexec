@@ -32,35 +32,48 @@ typedef union value {
 	int32_t i;
 } value_t;
 
-enum tag get_tag(value_t v)
+static enum tag get_tag(value_t v)
 {
 	return v.i & 0x3;
 }
 
-value_t mk_fixnum(int i)
+static value_t mk_fixnum(int i)
 {
 	value_t v;
 	v.i = (i << 2) | TAG_FIXNUM;
 	return v;
 }
 
-unsigned as_fixnum(value_t v)
+static unsigned as_fixnum(value_t v)
 {
 	assert(get_tag(v) == TAG_FIXNUM);
 	return v.i >> 2;
 }
 
-value_t mk_ref(void *ptr)
+static value_t mk_ref(void *ptr)
 {
 	value_t v;
 	v.ptr = ptr;
 	return v;
 }
 
-void *as_ref(value_t v)
+static void *as_ref(value_t v)
 {
 	assert(get_tag(v) == TAG_REF);
 	return v.ptr;
+}
+
+static void print_value(FILE *stream, value_t v)
+{
+	switch (get_tag(v)) {
+	case TAG_FIXNUM:
+		fprintf(stream, "%d", as_fixnum(v));
+		break;
+
+	case TAG_REF:
+		assert(!"implemented yet");
+		break;
+	}
 }
 
 /*----------------------------------------------------------------
@@ -409,15 +422,8 @@ static void interpret_string(struct interpreter *terp, const char *str)
 static void dot(struct interpreter *terp)
 {
 	value_t v = pop(&terp->stack);
-	switch (get_tag(v)) {
-	case TAG_FIXNUM:
-		printf("%d", as_fixnum(v));
-		break;
-
-	case TAG_REF:
-		assert(!"implemented yet");
-		break;
-	}
+	print_value(stdout, v);
+	printf("\n");
 }
 
 static void dup(struct interpreter *terp)
@@ -453,6 +459,34 @@ static void add_primitives(struct interpreter *terp)
 /*----------------------------------------------------------------
  * Top level
  *--------------------------------------------------------------*/
+static void print_stack(struct stack *s)
+{
+	unsigned i;
+
+	printf("\n ~~~ stack ~~~\n");
+	for (i = 0; i < s->nr_entries; i++) {
+		print_value(stdout, s->values[i]);
+		printf("\n");
+	}
+}
+
+static int repl(struct interpreter *terp)
+{
+	char buffer[4096];
+
+	for (;;) {
+		printf("dmexec> ");
+		fflush(stdout);
+
+		if (!fgets(buffer, sizeof(buffer), stdin))
+			break;
+
+		interpret_string(terp, buffer);
+		print_stack(&terp->stack);
+	}
+
+	return 0;
+}
 
 int main(int argc, char **argv)
 {
@@ -460,7 +494,5 @@ int main(int argc, char **argv)
 
 	init_interpreter(&terp);
 	add_primitives(&terp);
-	interpret_string(&terp, "5 6 + 1 - .");
-
-	return 0;
+	return repl(&terp);
 }
