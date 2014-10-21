@@ -62,19 +62,6 @@ static void *as_ref(value_t v)
 	return v.ptr;
 }
 
-static void print_value(FILE *stream, value_t v)
-{
-	switch (get_tag(v)) {
-	case TAG_FIXNUM:
-		fprintf(stream, "%d", as_fixnum(v));
-		break;
-
-	case TAG_REF:
-		assert(!"implemented yet");
-		break;
-	}
-}
-
 /*----------------------------------------------------------------
  * Objects
  *--------------------------------------------------------------*/
@@ -114,7 +101,8 @@ static void *alloc(enum object_type type, size_t s)
 {
 	struct header *h = malloc(s + sizeof(*h));
 
-	out_of_memory();
+	if (!h)
+		out_of_memory();
 
 	h->type = type;
 	h->size = s;
@@ -153,6 +141,53 @@ static struct string *clone_string(struct string *orig)
 	struct string *new = alloc_string(orig->alloc_end - orig->begin);
 	memcpy(new->begin, orig->begin, orig->end - orig->begin);
 	return new;
+}
+
+static value_t mk_string(const char *b, const char *e)
+{
+	unsigned len = e - b;
+	struct string *s = alloc_string(len);
+
+	memcpy(s->begin, b, len);
+	s->end = s->begin + len;
+
+	return mk_ref(s);
+}
+
+/*----------------------------------------------------------------
+ * Printing values
+ *--------------------------------------------------------------*/
+static void print_string(FILE *stream, struct string *str)
+{
+	const char *ptr;
+
+	fputc('\"', stream);
+	for (ptr = str->begin; ptr != str->end; ptr++)
+		fputc(*ptr, stream);
+	fputc('\"', stream);
+}
+
+static void print_value(FILE *stream, value_t v)
+{
+	struct header *h;
+
+	switch (get_tag(v)) {
+	case TAG_FIXNUM:
+		fprintf(stream, "%d", as_fixnum(v));
+		break;
+
+	case TAG_REF:
+		h = get_header(v);
+		switch (h->type) {
+		case STRING:
+			print_string(stream, (struct string *) v.ptr);
+			break;
+
+		default:
+			fprintf(stderr, "not implemented\n");
+		}
+		break;
+	}
 }
 
 /*----------------------------------------------------------------
@@ -255,6 +290,28 @@ static bool scan_fixnum(struct input *in, struct token *result)
 	return true;
 }
 
+static bool scan_string(struct input *in, struct token *result)
+{
+	result->type = TOK_STRING;
+	step_input(in);
+	result->begin = in->begin;
+
+	// FIXME: support escapes
+	while (more_input(in) && *in->begin != '\"')
+		step_input(in);
+
+	result->end = in->begin;
+
+	if (!more_input(in)) {
+		fprintf(stderr, "bad string\n");
+		exit(1);
+	}
+
+	step_input(in);
+
+	return true;
+}
+
 static bool scan_word(struct input *in, struct token *result)
 {
 	result->type = TOK_WORD;
@@ -279,6 +336,10 @@ static bool scan(struct input *in, struct token *result)
 
 	if (isdigit(*in->begin))
 		return scan_fixnum(in, result);
+
+	else if (*in->begin == '\"')
+		return scan_string(in, result);
+
 	else
 		return scan_word(in, result);
 }
@@ -372,7 +433,7 @@ static void interpret(struct interpreter *terp, struct input *in)
 			break;
 
 		case TOK_STRING:
-			//push(&terp->stack, mk_string(terp->tok.begin, terp->tok.end));
+			push(&terp->stack, mk_string(terp->tok.begin, terp->tok.end));
 			break;
 
 		case TOK_WORD:
