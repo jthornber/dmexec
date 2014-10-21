@@ -94,13 +94,13 @@ struct string {
  * Memory manager
  *--------------------------------------------------------------*/
 
-void out_of_memory()
+static void out_of_memory()
 {
 	fprintf(stderr, "Out of memory.\n");
 	exit(1);
 }
 
-void *alloc(enum object_type type, size_t s)
+static void *alloc(enum object_type type, size_t s)
 {
 	struct header *h = malloc(s + sizeof(*h));
 
@@ -113,7 +113,7 @@ void *alloc(enum object_type type, size_t s)
 	return ((char *) (h + 1));
 }
 
-struct header *get_header(value_t v)
+static struct header *get_header(value_t v)
 {
 	struct header *h = (struct header *) v.ptr - 1;
 	assert(h->magic == HEADER_MAGIC);
@@ -124,7 +124,7 @@ struct header *get_header(value_t v)
  * String handling
  *--------------------------------------------------------------*/
 
-struct string *alloc_string(unsigned space)
+static struct string *alloc_string(unsigned space)
 {
 	struct string *s;
 	char *b;
@@ -139,7 +139,7 @@ struct string *alloc_string(unsigned space)
 	return s;
 }
 
-struct string *clone_string(struct string *orig)
+static struct string *clone_string(struct string *orig)
 {
 	struct string *new = alloc_string(orig->alloc_end - orig->begin);
 	memcpy(new->begin, orig->begin, orig->end - orig->begin);
@@ -156,24 +156,24 @@ struct stack {
 	value_t values[MAX_STACK];
 };
 
-void init_stack(struct stack *s)
+static void init_stack(struct stack *s)
 {
 	s->nr_entries = 0;
 }
 
-void push(struct stack *s, value_t v)
+static void push(struct stack *s, value_t v)
 {
 	assert(s->nr_entries < MAX_STACK);
 	s->values[s->nr_entries++] = v;
 }
 
-value_t peek(struct stack *s)
+static value_t peek(struct stack *s)
 {
 	assert(s->nr_entries);
 	return s->values[s->nr_entries - 1];
 }
 
-value_t pop(struct stack *s)
+static value_t pop(struct stack *s)
 {
 	assert(s->nr_entries);
 	s->nr_entries--;
@@ -307,7 +307,7 @@ static void init_interpreter(struct interpreter *terp)
 	init_stack(&terp->stack);
 }
 
-void add_primitive(struct interpreter *terp, const char *name, prim_fn fn)
+static void add_primitive(struct interpreter *terp, const char *name, prim_fn fn)
 {
 	// FIXME: should this be managed by the mm?
 	struct primitive *p = malloc(sizeof(*p));
@@ -342,7 +342,7 @@ static int cmp_str_tok(const char *str, const char *b, const char *e)
 		return 1;
 }
 
-struct primitive *find_primitive(struct interpreter *terp, const char *b, const char *e)
+static struct primitive *find_primitive(struct interpreter *terp, const char *b, const char *e)
 {
 	struct primitive *p;
 
@@ -353,7 +353,7 @@ struct primitive *find_primitive(struct interpreter *terp, const char *b, const 
 	return NULL;
 }
 
-void interpret(struct interpreter *terp, struct input *in)
+static void interpret(struct interpreter *terp, struct input *in)
 {
 	const char *b;
 	struct primitive *p;
@@ -406,7 +406,7 @@ static void interpret_string(struct interpreter *terp, const char *str)
  * Primitives
  *--------------------------------------------------------------*/
 
-void dot(struct interpreter *terp)
+static void dot(struct interpreter *terp)
 {
 	value_t v = pop(&terp->stack);
 	switch (get_tag(v)) {
@@ -420,13 +420,13 @@ void dot(struct interpreter *terp)
 	}
 }
 
-void dup(struct interpreter *terp)
+static void dup(struct interpreter *terp)
 {
 	value_t v = peek(&terp->stack);
 	push(&terp->stack, v);
 }
 
-void fixnum_add(struct interpreter *terp)
+static void fixnum_add(struct interpreter *terp)
 {
 	value_t v1 = pop(&terp->stack);
 	value_t v2 = pop(&terp->stack);
@@ -434,7 +434,7 @@ void fixnum_add(struct interpreter *terp)
 	push(&terp->stack, mk_fixnum(as_fixnum(v1) + as_fixnum(v2)));
 }
 
-void fixnum_sub(struct interpreter *terp)
+static void fixnum_sub(struct interpreter *terp)
 {
 	value_t v1 = pop(&terp->stack);
 	value_t v2 = pop(&terp->stack);
