@@ -21,7 +21,6 @@ unsigned round_up(unsigned n, unsigned pow)
  *
  * The bottom 2 bits are used for tagging.
  *--------------------------------------------------------------*/
-
 enum tag {
 	TAG_REF = 0,
 	TAG_FIXNUM = 1
@@ -79,7 +78,6 @@ static void print_value(FILE *stream, value_t v)
 /*----------------------------------------------------------------
  * Objects
  *--------------------------------------------------------------*/
-
 #define HEADER_MAGIC 846219U
 
 enum object_type {
@@ -106,7 +104,6 @@ struct string {
 /*----------------------------------------------------------------
  * Memory manager
  *--------------------------------------------------------------*/
-
 static void out_of_memory()
 {
 	fprintf(stderr, "Out of memory.\n");
@@ -136,7 +133,6 @@ static struct header *get_header(value_t v)
 /*----------------------------------------------------------------
  * String handling
  *--------------------------------------------------------------*/
-
 static struct string *alloc_string(unsigned space)
 {
 	struct string *s;
@@ -197,7 +193,6 @@ static value_t pop(struct stack *s)
 /*----------------------------------------------------------------
  * Lexer
  *--------------------------------------------------------------*/
-
 enum token_type {
 	TOK_FIXNUM,
 	TOK_STRING,
@@ -291,7 +286,6 @@ static bool scan(struct input *in, struct token *result)
 /*----------------------------------------------------------------
  * Interpreter
  *--------------------------------------------------------------*/
-
 struct interpreter;
 
 typedef void (*prim_fn)(struct interpreter *);
@@ -418,7 +412,6 @@ static void interpret_string(struct interpreter *terp, const char *str)
 /*----------------------------------------------------------------
  * Primitives
  *--------------------------------------------------------------*/
-
 static void dot(struct interpreter *terp)
 {
 	value_t v = pop(&terp->stack);
