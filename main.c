@@ -758,6 +758,14 @@ static void dup(struct interpreter *terp)
 	push(&terp->stack, v);
 }
 
+static void swap(struct interpreter *terp)
+{
+	value_t v1 = pop(&terp->stack);
+	value_t v2 = pop(&terp->stack);
+	push(&terp->stack, v1);
+	push(&terp->stack, v2);
+}
+
 static void fixnum_add(struct interpreter *terp)
 {
 	value_t v1 = pop(&terp->stack);
@@ -795,6 +803,7 @@ static void add_primitives(struct interpreter *terp)
 	add_primitive(terp, "+", fixnum_add);
 	add_primitive(terp, "-", fixnum_sub);
 	add_primitive(terp, "call", call);
+	add_primitive(terp, "swap", swap);
 }
 
 /*----------------------------------------------------------------
