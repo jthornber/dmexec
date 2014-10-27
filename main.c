@@ -68,24 +68,19 @@ static void *as_ref(value_t v)
 #define HEADER_MAGIC 846219U
 
 enum object_type {
-	FIXNUM,
 	STRING,
+	BYTE_ARRAY,
 	TUPLE,
 	WORD,
 	QUOT,
-	ARRAY
+	ARRAY,
+	FIXNUM			/* these are always tagged immediate values */
 };
 
 struct header {
 	enum object_type type;
 	unsigned size; 		/* in bytes, we always round to a 4 byte boundary */
 	unsigned magic;
-};
-
-struct string {
-	char *begin;
-	char *end;
-	char *alloc_end;
 };
 
 /*----------------------------------------------------------------
@@ -111,6 +106,13 @@ static void *alloc(enum object_type type, size_t s)
 	return ((char *) (h + 1));
 }
 
+static void *zalloc(enum object_type type, size_t s)
+{
+	void *ptr = alloc(type, s);
+	memset(ptr, 0, s);
+	return ptr;
+}
+
 static struct header *get_header(value_t v)
 {
 	struct header *h = (struct header *) v.ptr - 1;
@@ -118,9 +120,84 @@ static struct header *get_header(value_t v)
 	return h;
 };
 
+enum object_type get_type(value_t v)
+{
+	struct header *h;
+
+	if (get_tag(v) == TAG_FIXNUM)
+		return FIXNUM;
+
+	h = get_header(v);
+	return h->type;
+}
+
+/*----------------------------------------------------------------
+ * Words
+ *--------------------------------------------------------------*/
+struct word {
+	char *b, *e;
+};
+
+value_t mk_word(const char *begin, const char *end)
+{
+	char *ptr;
+	struct word *w = alloc(WORD, sizeof(*w) + round_up(end - begin, 4));
+
+	w->b = (char *)(w + 1);
+	for (ptr = w->b; begin != end; ptr++, begin++)
+		*ptr = *begin;
+	w->e = ptr;
+
+	return mk_ref(w);
+}
+
+/*----------------------------------------------------------------
+ * Byte array
+ *--------------------------------------------------------------*/
+struct byte_array {
+	unsigned allocated;
+	unsigned len;
+	unsigned char *bytes;
+};
+
+struct byte_array *mk_byte_array(unsigned len)
+{
+	struct byte_array *ba = zalloc(BYTE_ARRAY, sizeof(*ba));
+	ba->bytes = malloc(len);
+	if (!ba->bytes)
+		out_of_memory();
+
+	ba->allocated = len;
+	return ba;
+}
+
+void realloc_byte_array(struct byte_array *ba, unsigned new_len)
+{
+	unsigned char *new_bytes = malloc(new_len);
+	if (!new_bytes)
+		out_of_memory();
+	memcpy(new_bytes, ba->bytes, ba->len);
+	free(ba->bytes);
+	ba->bytes = new_bytes;
+}
+
+void push_byte(struct byte_array *ba, unsigned b)
+{
+	if (ba->len == ba->allocated)
+		realloc_byte_array(ba, ba->len * 2);
+
+	ba->bytes[ba->len++] = b;
+}
+
 /*----------------------------------------------------------------
  * String handling
  *--------------------------------------------------------------*/
+struct string {
+	char *begin;
+	char *end;
+	char *alloc_end;
+};
+
 static struct string *alloc_string(unsigned space)
 {
 	struct string *s;
@@ -155,8 +232,45 @@ static value_t mk_string(const char *b, const char *e)
 }
 
 /*----------------------------------------------------------------
+ * Arrays
+ *--------------------------------------------------------------*/
+#define MAX_ARRAY_SIZE 32
+
+// FIXME: add dynamic resizing
+struct array {
+	unsigned nr_elts;
+	value_t elts[MAX_ARRAY_SIZE]; /* yee haa! */
+};
+
+static value_t mk_array()
+{
+	struct array *a = alloc(ARRAY, sizeof(*a));
+	memset(a, 0, sizeof(*a));
+	a->nr_elts = 0;
+	return mk_ref(a);
+}
+
+static value_t mk_quot()
+{
+	struct array *a = alloc(QUOT, sizeof(*a));
+	memset(a, 0, sizeof(*a));
+	a->nr_elts = 0;
+	return mk_ref(a);
+}
+
+static void append_array(value_t av, value_t v)
+{
+	struct array *a = as_ref(av);
+
+	assert(a->nr_elts < MAX_ARRAY_SIZE);
+	a->elts[a->nr_elts++] = v;
+}
+
+/*----------------------------------------------------------------
  * Printing values
  *--------------------------------------------------------------*/
+static void print_value(FILE *stream, value_t v);
+
 static void print_string(FILE *stream, struct string *str)
 {
 	const char *ptr;
@@ -165,6 +279,36 @@ static void print_string(FILE *stream, struct string *str)
 	for (ptr = str->begin; ptr != str->end; ptr++)
 		fputc(*ptr, stream);
 	fputc('\"', stream);
+}
+
+static void print_array_like(FILE *stream, struct array *a, char b, char e)
+{
+	unsigned i;
+
+	fprintf(stream, "%c ", b);
+	for (i = 0; i < a->nr_elts; i++) {
+		print_value(stream, a->elts[i]);
+		fprintf(stream, " ");
+	}
+	fprintf(stream, "%c", e);
+}
+
+static void print_array(FILE *stream, struct array *a)
+{
+	print_array_like(stream, a, '{', '}');
+}
+
+static void print_quot(FILE *stream, struct array *a)
+{
+	print_array_like(stream, a, '[', ']');
+}
+
+static void print_word(FILE *stream, struct word *w)
+{
+	const char *ptr;
+
+	for (ptr = w->b; ptr != w->e; ptr++)
+		fputc(*ptr, stream);
 }
 
 static void print_value(FILE *stream, value_t v)
@@ -181,6 +325,18 @@ static void print_value(FILE *stream, value_t v)
 		switch (h->type) {
 		case STRING:
 			print_string(stream, (struct string *) v.ptr);
+			break;
+
+		case ARRAY:
+			print_array(stream, (struct array *) v.ptr);
+			break;
+
+		case QUOT:
+			print_quot(stream, (struct array *) v.ptr);
+			break;
+
+		case WORD:
+			print_word(stream, (struct word *) v.ptr);
 			break;
 
 		default:
@@ -362,6 +518,10 @@ struct dynamic_scope {
 	struct list_head definitions;
 };
 
+struct input_source {
+	bool (*next_value)(value_t *v);
+};
+
 struct interpreter {
 	struct list_head prims;
 	struct stack stack;
@@ -421,42 +581,169 @@ static struct primitive *find_primitive(struct interpreter *terp, const char *b,
 	return NULL;
 }
 
+static bool next_value(struct interpreter *terp, struct input *in, value_t *r)
+{
+	value_t r2;
+
+	switch (terp->tok.type) {
+	case TOK_FIXNUM:
+		*r = mk_fixnum(terp->tok.fixnum);
+		break;
+
+	case TOK_STRING:
+		*r = mk_string(terp->tok.begin, terp->tok.end);
+		break;
+
+	case TOK_WORD:
+		// FIXME: do a full compare of the token
+		if (*terp->tok.begin == '{') {
+			*r = mk_array();
+			while (scan(in, &terp->tok) &&
+			       *terp->tok.begin != '}' &&
+			       next_value(terp, in, &r2))
+				append_array(*r, r2);
+
+		} else if (*terp->tok.begin == '[') {
+			*r = mk_quot();
+			while (scan(in, &terp->tok) &&
+			       *terp->tok.begin != ']' &&
+			       next_value(terp, in, &r2))
+				append_array(*r, r2);
+			//scan(in, &terp->tok); /* consume the close bracket */
+
+		} else
+			*r = mk_word(terp->tok.begin, terp->tok.end);
+		break;
+
+	default:
+		assert(!"implemented");
+		exit(1);
+	}
+
+	return true;
+}
+
+// FIXME: refactor with interpret_quot
 static void interpret(struct interpreter *terp, struct input *in)
 {
 	const char *b;
 	struct primitive *p;
+	value_t v;
+	struct word *w;
+	struct header *h;
 
-	while (scan(in, &terp->tok)) {
-		switch (terp->tok.type) {
-		case TOK_FIXNUM:
-			push(&terp->stack, mk_fixnum(terp->tok.fixnum));
+	while (scan(in, &terp->tok) && next_value(terp, in, &v)) {
+		switch (get_tag(v)) {
+		case TAG_FIXNUM:
+			push(&terp->stack, v);
 			break;
 
-		case TOK_STRING:
-			push(&terp->stack, mk_string(terp->tok.begin, terp->tok.end));
-			break;
+		case TAG_REF:
+			h = get_header(v);
+			switch (h->type) {
+			case STRING:
+				push(&terp->stack, v);
+				break;
 
-		case TOK_WORD:
-			p = find_primitive(terp, terp->tok.begin, terp->tok.end);
-			if (!p) {
-				// FIXME: add better error handling
-				fprintf(stderr, "couldn't find primitive '");
-				for (b = terp->tok.begin; b != terp->tok.end; b++)
-					fprintf(stderr, "%c", *b);
-				fprintf(stderr, "'\n");
-				exit(1);
+			case ARRAY:
+				push(&terp->stack, v);
+				break;
+
+			case BYTE_ARRAY:
+				push(&terp->stack, v);
+				break;
+
+			case TUPLE:
+				push(&terp->stack, v);
+				break;
+
+			case WORD:
+				w = (struct word *) as_ref(v);
+				p = find_primitive(terp, w->b, w->e);
+				if (!p) {
+					// FIXME: add better error handling
+					fprintf(stderr, "couldn't find primitive '");
+					for (b = terp->tok.begin; b != terp->tok.end; b++)
+						fprintf(stderr, "%c", *b);
+					fprintf(stderr, "'\n");
+					exit(1);
+
+				} else
+					p->fn(terp);
+				break;
+
+			case QUOT:
+				push(&terp->stack, v);
+				break;
+
+			case FIXNUM:
+				fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
+				break;
 			}
-			p->fn(terp);
+		}
+	}
+}
+
+static void interpret_quot(struct interpreter *terp, struct array *q)
+{
+	const char *b;
+	struct primitive *p;
+	value_t v;
+	struct word *w;
+	struct header *h;
+	unsigned i;
+
+	for (i = 0; i < q->nr_elts; i++) {
+		v = q->elts[i];
+
+		switch (get_tag(v)) {
+		case TAG_FIXNUM:
+			push(&terp->stack, v);
 			break;
 
-		case TOK_COLON:
-		case TOK_SEMI_COLON:
-		case TOK_OPEN_BRACE:
-		case TOK_CLOSE_BRACE:
-		case TOK_OPEN_SQUARE:
-		case TOK_CLOSE_SQUARE:
-			assert(!"implemented");
-		};
+		case TAG_REF:
+			h = get_header(v);
+			switch (h->type) {
+			case STRING:
+				push(&terp->stack, v);
+				break;
+
+			case ARRAY:
+				push(&terp->stack, v);
+				break;
+
+			case BYTE_ARRAY:
+				push(&terp->stack, v);
+				break;
+
+			case TUPLE:
+				push(&terp->stack, v);
+				break;
+
+			case WORD:
+				w = (struct word *) as_ref(v);
+				p = find_primitive(terp, w->b, w->e);
+				if (!p) {
+					// FIXME: add better error handling
+					fprintf(stderr, "couldn't find primitive '");
+					for (b = terp->tok.begin; b != terp->tok.end; b++)
+						fprintf(stderr, "%c", *b);
+					fprintf(stderr, "'\n");
+					exit(1);
+
+				} else
+					p->fn(terp);
+				break;
+
+			case QUOT:
+				push(&terp->stack, v);
+				break;
+
+			case FIXNUM:
+				fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
+				break;
+			}
+		}
 	}
 }
 
@@ -502,12 +789,27 @@ static void fixnum_sub(struct interpreter *terp)
 	push(&terp->stack, mk_fixnum(as_fixnum(v2) - as_fixnum(v1)));
 }
 
+static void call(struct interpreter *terp)
+{
+	value_t maybe_q = pop(&terp->stack);
+
+	fprintf(stderr, "calliing call\n");
+
+	if (get_type(maybe_q) != QUOT) {
+		fprintf(stderr, "not a quotation\n");
+		exit(1);
+	}
+
+	interpret_quot(terp, as_ref(maybe_q));
+}
+
 static void add_primitives(struct interpreter *terp)
 {
 	add_primitive(terp, ".", dot);
 	add_primitive(terp, "dup", dup);
 	add_primitive(terp, "+", fixnum_add);
 	add_primitive(terp, "-", fixnum_sub);
+	add_primitive(terp, "call", call);
 }
 
 /*----------------------------------------------------------------
