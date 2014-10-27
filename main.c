@@ -62,6 +62,8 @@ static void *as_ref(value_t v)
 	return v.ptr;
 }
 
+static void print_value(FILE *stream, value_t v);
+
 /*----------------------------------------------------------------
  * Objects
  *--------------------------------------------------------------*/
@@ -263,14 +265,14 @@ static void append_array(value_t av, value_t v)
 	struct array *a = as_ref(av);
 
 	assert(a->nr_elts < MAX_ARRAY_SIZE);
+	fprintf(stderr, "adding value");
+	print_value(stderr, v);
 	a->elts[a->nr_elts++] = v;
 }
 
 /*----------------------------------------------------------------
  * Printing values
  *--------------------------------------------------------------*/
-static void print_value(FILE *stream, value_t v);
-
 static void print_string(FILE *stream, struct string *str)
 {
 	const char *ptr;
@@ -519,7 +521,7 @@ struct dynamic_scope {
 };
 
 struct input_source {
-	bool (*next_value)(value_t *v);
+	bool (*next_value)(struct input_source *in, value_t *v);
 };
 
 struct interpreter {
@@ -581,38 +583,144 @@ static struct primitive *find_primitive(struct interpreter *terp, const char *b,
 	return NULL;
 }
 
-static bool next_value(struct interpreter *terp, struct input *in, value_t *r)
+static void interpret(struct interpreter *terp, struct input_source *in)
+{
+	const char *b;
+	struct primitive *p;
+	value_t v;
+	struct word *w;
+	struct header *h;
+
+	while (in->next_value(in, &v)) {
+		switch (get_tag(v)) {
+		case TAG_FIXNUM:
+			push(&terp->stack, v);
+			break;
+
+		case TAG_REF:
+			h = get_header(v);
+			switch (h->type) {
+			case STRING:
+				push(&terp->stack, v);
+				break;
+
+			case ARRAY:
+				push(&terp->stack, v);
+				break;
+
+			case BYTE_ARRAY:
+				push(&terp->stack, v);
+				break;
+
+			case TUPLE:
+				push(&terp->stack, v);
+				break;
+
+			case WORD:
+				w = (struct word *) as_ref(v);
+				p = find_primitive(terp, w->b, w->e);
+				if (!p) {
+					// FIXME: add better error handling
+					fprintf(stderr, "couldn't find primitive '");
+					for (b = w->b; b != w->e; b++)
+						fprintf(stderr, "%c", *b);
+					fprintf(stderr, "'\n");
+					exit(1);
+
+				} else
+					p->fn(terp);
+				break;
+
+			case QUOT:
+				push(&terp->stack, v);
+				break;
+
+			case FIXNUM:
+				fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
+				break;
+			}
+		}
+	}
+}
+
+/*----------------------------------------------------------------
+ * Quot source
+ *--------------------------------------------------------------*/
+struct quot_source {
+	struct input_source source;
+	struct array *quot;
+	unsigned index;
+};
+
+static bool quot_next_value(struct input_source *in, value_t *r)
+{
+	struct quot_source *qs = container_of(in, struct quot_source, source);
+	if (qs->index < qs->quot->nr_elts) {
+		*r = qs->quot->elts[qs->index++];
+		return true;
+	}
+
+	return false;
+}
+
+static void interpret_quot(struct interpreter *terp, struct array *q)
+{
+	struct quot_source in;
+
+	in.source.next_value = quot_next_value;
+	in.quot = q;
+	in.index = 0;
+
+	interpret(terp, &in.source);
+}
+
+/*----------------------------------------------------------------
+ * String source
+ *--------------------------------------------------------------*/
+struct string_source {
+	struct input_source source;
+
+	struct input in;
+	struct token tok;
+};
+
+static bool string_next_value(struct input_source *in, value_t *r)
 {
 	value_t r2;
+	struct string_source *ss = container_of(in, struct string_source, source);
 
-	switch (terp->tok.type) {
+	if (!scan(&ss->in, &ss->tok))
+		return false;
+
+	switch (ss->tok.type) {
 	case TOK_FIXNUM:
-		*r = mk_fixnum(terp->tok.fixnum);
+		*r = mk_fixnum(ss->tok.fixnum);
 		break;
 
 	case TOK_STRING:
-		*r = mk_string(terp->tok.begin, terp->tok.end);
+		*r = mk_string(ss->tok.begin, ss->tok.end);
 		break;
 
 	case TOK_WORD:
 		// FIXME: do a full compare of the token
-		if (*terp->tok.begin == '{') {
+		if (*ss->tok.begin == '{') {
 			*r = mk_array();
-			while (scan(in, &terp->tok) &&
-			       *terp->tok.begin != '}' &&
-			       next_value(terp, in, &r2))
+			while (string_next_value(in, &r2))
 				append_array(*r, r2);
 
-		} else if (*terp->tok.begin == '[') {
+		} else if (*ss->tok.begin == '[') {
 			*r = mk_quot();
-			while (scan(in, &terp->tok) &&
-			       *terp->tok.begin != ']' &&
-			       next_value(terp, in, &r2))
+			while (string_next_value(in, &r2))
 				append_array(*r, r2);
-			//scan(in, &terp->tok); /* consume the close bracket */
+
+		} else if (*ss->tok.begin == '}') {
+			return false;
+
+		} else if (*ss->tok.begin == ']') {
+			return false;
 
 		} else
-			*r = mk_word(terp->tok.begin, terp->tok.end);
+			*r = mk_word(ss->tok.begin, ss->tok.end);
 		break;
 
 	default:
@@ -623,138 +731,15 @@ static bool next_value(struct interpreter *terp, struct input *in, value_t *r)
 	return true;
 }
 
-// FIXME: refactor with interpret_quot
-static void interpret(struct interpreter *terp, struct input *in)
-{
-	const char *b;
-	struct primitive *p;
-	value_t v;
-	struct word *w;
-	struct header *h;
-
-	while (scan(in, &terp->tok) && next_value(terp, in, &v)) {
-		switch (get_tag(v)) {
-		case TAG_FIXNUM:
-			push(&terp->stack, v);
-			break;
-
-		case TAG_REF:
-			h = get_header(v);
-			switch (h->type) {
-			case STRING:
-				push(&terp->stack, v);
-				break;
-
-			case ARRAY:
-				push(&terp->stack, v);
-				break;
-
-			case BYTE_ARRAY:
-				push(&terp->stack, v);
-				break;
-
-			case TUPLE:
-				push(&terp->stack, v);
-				break;
-
-			case WORD:
-				w = (struct word *) as_ref(v);
-				p = find_primitive(terp, w->b, w->e);
-				if (!p) {
-					// FIXME: add better error handling
-					fprintf(stderr, "couldn't find primitive '");
-					for (b = terp->tok.begin; b != terp->tok.end; b++)
-						fprintf(stderr, "%c", *b);
-					fprintf(stderr, "'\n");
-					exit(1);
-
-				} else
-					p->fn(terp);
-				break;
-
-			case QUOT:
-				push(&terp->stack, v);
-				break;
-
-			case FIXNUM:
-				fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
-				break;
-			}
-		}
-	}
-}
-
-static void interpret_quot(struct interpreter *terp, struct array *q)
-{
-	const char *b;
-	struct primitive *p;
-	value_t v;
-	struct word *w;
-	struct header *h;
-	unsigned i;
-
-	for (i = 0; i < q->nr_elts; i++) {
-		v = q->elts[i];
-
-		switch (get_tag(v)) {
-		case TAG_FIXNUM:
-			push(&terp->stack, v);
-			break;
-
-		case TAG_REF:
-			h = get_header(v);
-			switch (h->type) {
-			case STRING:
-				push(&terp->stack, v);
-				break;
-
-			case ARRAY:
-				push(&terp->stack, v);
-				break;
-
-			case BYTE_ARRAY:
-				push(&terp->stack, v);
-				break;
-
-			case TUPLE:
-				push(&terp->stack, v);
-				break;
-
-			case WORD:
-				w = (struct word *) as_ref(v);
-				p = find_primitive(terp, w->b, w->e);
-				if (!p) {
-					// FIXME: add better error handling
-					fprintf(stderr, "couldn't find primitive '");
-					for (b = terp->tok.begin; b != terp->tok.end; b++)
-						fprintf(stderr, "%c", *b);
-					fprintf(stderr, "'\n");
-					exit(1);
-
-				} else
-					p->fn(terp);
-				break;
-
-			case QUOT:
-				push(&terp->stack, v);
-				break;
-
-			case FIXNUM:
-				fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
-				break;
-			}
-		}
-	}
-}
-
 static void interpret_string(struct interpreter *terp, const char *str)
 {
-	struct input in;
+	struct string_source in;
 
-	in.begin = str;
-	in.end = str + strlen(str);
+	in.source.next_value = string_next_value;
+	in.in.begin = str;
+	in.in.end = str + strlen(str);
 
-	interpret(terp, &in);
+	interpret(terp, &in.source);
 }
 
 /*----------------------------------------------------------------
