@@ -265,8 +265,6 @@ static void append_array(value_t av, value_t v)
 	struct array *a = as_ref(av);
 
 	assert(a->nr_elts < MAX_ARRAY_SIZE);
-	fprintf(stderr, "adding value");
-	print_value(stderr, v);
 	a->elts[a->nr_elts++] = v;
 }
 
@@ -785,8 +783,6 @@ static void fixnum_sub(struct interpreter *terp)
 static void call(struct interpreter *terp)
 {
 	value_t maybe_q = pop(&terp->stack);
-
-	fprintf(stderr, "calliing call\n");
 
 	if (get_type(maybe_q) != QUOT) {
 		fprintf(stderr, "not a quotation\n");
