@@ -1,10 +1,15 @@
 #include <assert.h>
+#include <ctype.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "list.h"
 
@@ -152,6 +157,21 @@ value_t mk_word(const char *begin, const char *end)
 	w->e = ptr;
 
 	return mk_ref(w);
+}
+
+static bool word_eq(struct word *lhs, struct word *rhs)
+{
+	const char *p1 = lhs->b;
+	const char *p2 = rhs->b;
+
+	while (p1 != lhs->e && p2 != rhs->e) {
+		if (*p1 != *p2)
+			return false;
+
+		p1++, p2++;
+	}
+
+	return p1 == lhs->e && p2 == rhs->e;
 }
 
 /*----------------------------------------------------------------
@@ -580,21 +600,6 @@ static int cmp_str_tok(const char *str, const char *b, const char *e)
 		return 1;
 }
 
-static bool word_eq(struct word *lhs, struct word *rhs)
-{
-	const char *p1 = lhs->b;
-	const char *p2 = rhs->b;
-
-	while (p1 != lhs->e && p2 != rhs->e) {
-		if (*p1 != *p2)
-			return false;
-
-		p1++, p2++;
-	}
-
-	return p1 == lhs->e && p2 == rhs->e;
-}
-
 static struct primitive *find_primitive(struct interpreter *terp, const char *b, const char *e)
 {
 	struct primitive *p;
@@ -807,15 +812,42 @@ static bool string_next_value(struct input_source *in, value_t *r)
 	return true;
 }
 
-static void interpret_string(struct interpreter *terp, const char *str)
+static void interpret_string(struct interpreter *terp, const char *b, const char *e)
 {
 	struct string_source in;
 
 	in.source.next_value = string_next_value;
-	in.in.begin = str;
-	in.in.end = str + strlen(str);
+	in.in.begin = b;
+	in.in.end = e;
 
 	interpret(terp, &in.source);
+}
+
+static void interpret_file(struct interpreter *terp, const char *path)
+{
+	int fd;
+	struct stat info;
+	char *b, *e;
+
+	if (stat(path, &info) < 0) {
+		fprintf(stderr, "couldn't stat '%s'\n", path);
+		exit(1);
+	}
+
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "couldn't open '%s'\n", path);
+		exit(1);
+	}
+
+	b = mmap(NULL, info.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (!b) {
+		fprintf(stderr, "couldn't mmap '%s'\n", path);
+		exit(1);
+	}
+	e = b + info.st_size;
+
+	interpret_string(terp, b, e);
 }
 
 /*----------------------------------------------------------------
@@ -828,7 +860,7 @@ static void dot(struct interpreter *terp)
 	printf("\n");
 }
 
-static void dup(struct interpreter *terp)
+static void _dup(struct interpreter *terp)
 {
 	value_t v = peek(&terp->stack);
 	push(&terp->stack, v);
@@ -889,7 +921,7 @@ static void call(struct interpreter *terp)
 static void add_primitives(struct interpreter *terp)
 {
 	add_primitive(terp, ".", dot);
-	add_primitive(terp, "dup", dup);
+	add_primitive(terp, "dup", _dup);
 	add_primitive(terp, "+", fixnum_add);
 	add_primitive(terp, "-", fixnum_sub);
 	add_primitive(terp, "*", fixnum_mult);
@@ -923,7 +955,7 @@ static int repl(struct interpreter *terp)
 		if (!fgets(buffer, sizeof(buffer), stdin))
 			break;
 
-		interpret_string(terp, buffer);
+		interpret_string(terp, buffer, buffer + strlen(buffer));
 		print_stack(&terp->stack);
 	}
 
@@ -936,5 +968,9 @@ int main(int argc, char **argv)
 
 	init_interpreter(&terp);
 	add_primitives(&terp);
-	return repl(&terp);
+
+	if (argc == 2)
+		interpret_file(&terp, argv[1]);
+
+	repl(&terp);
 }
