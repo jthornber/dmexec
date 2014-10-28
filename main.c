@@ -28,7 +28,8 @@ unsigned round_up(unsigned n, unsigned pow)
  *--------------------------------------------------------------*/
 enum tag {
 	TAG_REF = 0,
-	TAG_FIXNUM = 1
+	TAG_FIXNUM = 1,
+	TAG_FALSE
 };
 
 typedef union value {
@@ -65,6 +66,18 @@ static void *as_ref(value_t v)
 {
 	assert(get_tag(v) == TAG_REF);
 	return v.ptr;
+}
+
+static value_t mk_false()
+{
+	value_t v;
+	v.i = TAG_FALSE;
+	return v;
+}
+
+static bool is_false(value_t v)
+{
+	return v.i == TAG_FALSE;
 }
 
 static void print_value(FILE *stream, value_t v);
@@ -364,6 +377,10 @@ static void print_value(FILE *stream, value_t v)
 			fprintf(stderr, "not implemented\n");
 		}
 		break;
+
+	case TAG_FALSE:
+		fprintf(stream, "f");
+		break;
 	}
 }
 
@@ -392,6 +409,12 @@ static value_t peek(struct stack *s)
 {
 	assert(s->nr_entries);
 	return s->values[s->nr_entries - 1];
+}
+
+static value_t peekn(struct stack *s, unsigned n)
+{
+	assert(s->nr_entries > n);
+	return s->values[s->nr_entries - n - 1];
 }
 
 static value_t pop(struct stack *s)
@@ -450,18 +473,23 @@ static bool scan_fixnum(struct input *in, struct token *result)
 {
 	int n = 0;
 
+	result->begin = in->begin;
 	while (more_input(in) && isdigit(*in->begin)) {
 		n *= 10;
 		n += *in->begin - '0'; /* FIXME: assumes ascii */
 		step_input(in);
 	}
 
-	result->type = TOK_FIXNUM;
-	result->fixnum = n;
-
 	if (more_input(in) && !isspace(*in->begin)) {
-		fprintf(stderr, "lex error");
-		exit(1);	/* FIXME: handle */
+		while (more_input(in) && !isspace(*in->begin))
+			step_input(in);
+
+		result->end = in->begin;
+		result->type = TOK_WORD;
+
+	} else {
+		result->type = TOK_FIXNUM;
+		result->fixnum = n;
 	}
 
 	return true;
@@ -557,6 +585,11 @@ struct interpreter {
 	struct list_head definitions;
 };
 
+#define PUSH(v) push(&terp->stack, v)
+#define POP() pop(&terp->stack)
+#define PEEK() peek(&terp->stack)
+#define PEEKN(n) peekn(&terp->stack, n)
+
 static void init_interpreter(struct interpreter *terp)
 {
 	memset(terp, 0, sizeof(*terp));
@@ -643,6 +676,10 @@ static void interpret(struct interpreter *terp, struct input_source *in)
 		switch (get_tag(v)) {
 		case TAG_FIXNUM:
 			push(&terp->stack, v);
+			break;
+
+		case TAG_FALSE:
+			PUSH(v);
 			break;
 
 		case TAG_REF:
@@ -780,8 +817,11 @@ static bool string_next_value(struct input_source *in, value_t *r)
 		break;
 
 	case TOK_WORD:
-		// FIXME: do a full compare of the token
-		if (*ss->tok.begin == '{') {
+		// FIXME: do a full compare of the tokens
+		if (*ss->tok.begin == 'f' && ss->tok.end == ss->tok.begin + 1) {
+			*r = mk_false();
+
+		} else if (*ss->tok.begin == '{') {
 			*r = mk_array();
 			while (string_next_value(in, &r2))
 				append_array(*r, r2);
@@ -853,62 +893,14 @@ static void interpret_file(struct interpreter *terp, const char *path)
 /*----------------------------------------------------------------
  * Primitives
  *--------------------------------------------------------------*/
-static void dot(struct interpreter *terp)
+static void clear(struct interpreter *terp)
 {
-	value_t v = pop(&terp->stack);
-	print_value(stdout, v);
-	printf("\n");
-}
-
-static void _dup(struct interpreter *terp)
-{
-	value_t v = peek(&terp->stack);
-	push(&terp->stack, v);
-}
-
-static void swap(struct interpreter *terp)
-{
-	value_t v1 = pop(&terp->stack);
-	value_t v2 = pop(&terp->stack);
-	push(&terp->stack, v1);
-	push(&terp->stack, v2);
-}
-
-static void fixnum_add(struct interpreter *terp)
-{
-	value_t v1 = pop(&terp->stack);
-	value_t v2 = pop(&terp->stack);
-
-	push(&terp->stack, mk_fixnum(as_fixnum(v1) + as_fixnum(v2)));
-}
-
-static void fixnum_sub(struct interpreter *terp)
-{
-	value_t v1 = pop(&terp->stack);
-	value_t v2 = pop(&terp->stack);
-
-	push(&terp->stack, mk_fixnum(as_fixnum(v2) - as_fixnum(v1)));
-}
-
-static void fixnum_mult(struct interpreter *terp)
-{
-	value_t v1 = pop(&terp->stack);
-	value_t v2 = pop(&terp->stack);
-
-	push(&terp->stack, mk_fixnum(as_fixnum(v2) * as_fixnum(v1)));
-}
-
-static void fixnum_div(struct interpreter *terp)
-{
-	value_t v1 = pop(&terp->stack);
-	value_t v2 = pop(&terp->stack);
-
-	push(&terp->stack, mk_fixnum(as_fixnum(v2) / as_fixnum(v1)));
+	terp->stack.nr_entries = 0;
 }
 
 static void call(struct interpreter *terp)
 {
-	value_t maybe_q = pop(&terp->stack);
+	value_t maybe_q = POP();
 
 	if (get_type(maybe_q) != QUOT) {
 		fprintf(stderr, "not a quotation\n");
@@ -918,16 +910,201 @@ static void call(struct interpreter *terp)
 	interpret_quot(terp, as_ref(maybe_q));
 }
 
+static void curry(struct interpreter *terp)
+{
+	value_t q = POP();
+	value_t obj = POP();
+	value_t new_q = mk_quot();
+	struct array *a = as_ref(q);
+	unsigned i;
+
+	append_array(new_q, obj);
+	for (i = 0; i < a->nr_elts; i++)
+		append_array(new_q, a->elts[i]);
+
+	PUSH(new_q);
+}
+
+static void dot(struct interpreter *terp)
+{
+	value_t v = POP();
+	print_value(stdout, v);
+	printf("\n");
+}
+
+static void ndrop(struct interpreter *terp)
+{
+	unsigned i;
+	value_t v = POP();
+
+	for (i = as_fixnum(v); i; i--)
+		POP();
+}
+
+static void nnip(struct interpreter *terp)
+{
+	unsigned i;
+	value_t v = POP();
+	value_t restore = POP();
+
+	for (i = as_fixnum(v); i; i--)
+		POP();
+
+	PUSH(restore);
+}
+
+static void _dup(struct interpreter *terp)
+{
+	value_t v = PEEK();
+	PUSH(v);
+}
+
+static void _dup2(struct interpreter *terp)
+{
+	value_t y = PEEK();
+	value_t x = PEEKN(1);
+	PUSH(x);
+	PUSH(y);
+}
+
+static void _dup3(struct interpreter *terp)
+{
+	value_t z = PEEK();
+	value_t y = PEEKN(1);
+	value_t x = PEEKN(2);
+
+	PUSH(x);
+	PUSH(y);
+	PUSH(z);
+}
+
+static void over(struct interpreter *terp)
+{
+	PUSH(PEEKN(1));
+}
+
+static void over2(struct interpreter *terp)
+{
+	PUSH(PEEKN(2));
+	PUSH(PEEKN(2));
+}
+
+static void pick(struct interpreter *terp)
+{
+	PUSH(PEEKN(2));
+}
+
+static void swap(struct interpreter *terp)
+{
+	value_t v1 = POP();
+	value_t v2 = POP();
+	PUSH(v1);
+	PUSH(v2);
+}
+
+static void dip(struct interpreter *terp)
+{
+	value_t q = POP();
+	value_t x = POP();
+	PUSH(q);
+	call(terp);
+	PUSH(x);
+}
+
+static void fixnum_add(struct interpreter *terp)
+{
+	value_t v1 = POP();
+	value_t v2 = POP();
+
+	PUSH(mk_fixnum(as_fixnum(v1) + as_fixnum(v2)));
+}
+
+static void fixnum_sub(struct interpreter *terp)
+{
+	value_t v1 = POP();
+	value_t v2 = POP();
+
+	PUSH(mk_fixnum(as_fixnum(v2) - as_fixnum(v1)));
+}
+
+static void fixnum_mult(struct interpreter *terp)
+{
+	value_t v1 = POP();
+	value_t v2 = POP();
+
+	PUSH(mk_fixnum(as_fixnum(v2) * as_fixnum(v1)));
+}
+
+static void fixnum_div(struct interpreter *terp)
+{
+	value_t v1 = POP();
+	value_t v2 = POP();
+
+	PUSH(mk_fixnum(as_fixnum(v2) / as_fixnum(v1)));
+}
+
+static void each(struct interpreter *terp)
+{
+	value_t q = POP();
+	value_t a = POP();
+	struct array *ary;
+	unsigned i;
+
+	if (get_type(q) != QUOT) {
+		fprintf(stderr, "not a quotation\n");
+		exit(1);
+	}
+
+	if (get_type(a) != ARRAY) {
+		fprintf(stderr, "not an array\n");
+		exit(1);
+	}
+
+	ary = as_ref(a);
+	for (i = 0; i < ary->nr_elts; i++) {
+		PUSH(ary->elts[i]);
+		interpret_quot(terp, as_ref(q));
+	}
+}
+
+static void choice(struct interpreter *terp)
+{
+	value_t f = POP();
+	value_t t = POP();
+	value_t p = POP();
+
+	if (is_false(p))
+		PUSH(f);
+	else
+		PUSH(t);
+}
+
 static void add_primitives(struct interpreter *terp)
 {
+	add_primitive(terp, "clear", clear);
 	add_primitive(terp, ".", dot);
+	add_primitive(terp, "ndrop", ndrop);
+	add_primitive(terp, "nnip", nnip);
 	add_primitive(terp, "dup", _dup);
+	add_primitive(terp, "2dup", _dup2);
+	add_primitive(terp, "3dup", _dup3);
+	add_primitive(terp, "over", over);
+	add_primitive(terp, "2over", over2);
+	add_primitive(terp, "pick", pick);
+	add_primitive(terp, "swap", swap);
+	add_primitive(terp, "dip", dip);
+
 	add_primitive(terp, "+", fixnum_add);
 	add_primitive(terp, "-", fixnum_sub);
 	add_primitive(terp, "*", fixnum_mult);
 	add_primitive(terp, "/", fixnum_div);
+
 	add_primitive(terp, "call", call);
-	add_primitive(terp, "swap", swap);
+	add_primitive(terp, "curry", curry);
+
+	add_primitive(terp, "?", choice);
+
+	add_primitive(terp, "each", each);
 }
 
 /*----------------------------------------------------------------
