@@ -780,6 +780,22 @@ static void fixnum_sub(struct interpreter *terp)
 	push(&terp->stack, mk_fixnum(as_fixnum(v2) - as_fixnum(v1)));
 }
 
+static void fixnum_mult(struct interpreter *terp)
+{
+	value_t v1 = pop(&terp->stack);
+	value_t v2 = pop(&terp->stack);
+
+	push(&terp->stack, mk_fixnum(as_fixnum(v2) * as_fixnum(v1)));
+}
+
+static void fixnum_div(struct interpreter *terp)
+{
+	value_t v1 = pop(&terp->stack);
+	value_t v2 = pop(&terp->stack);
+
+	push(&terp->stack, mk_fixnum(as_fixnum(v2) / as_fixnum(v1)));
+}
+
 static void call(struct interpreter *terp)
 {
 	value_t maybe_q = pop(&terp->stack);
@@ -798,6 +814,8 @@ static void add_primitives(struct interpreter *terp)
 	add_primitive(terp, "dup", dup);
 	add_primitive(terp, "+", fixnum_add);
 	add_primitive(terp, "-", fixnum_sub);
+	add_primitive(terp, "*", fixnum_mult);
+	add_primitive(terp, "/", fixnum_div);
 	add_primitive(terp, "call", call);
 	add_primitive(terp, "swap", swap);
 }
