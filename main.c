@@ -76,6 +76,7 @@ enum object_type {
 	WORD,
 	QUOT,
 	ARRAY,
+	DEF,
 	FIXNUM			/* these are always tagged immediate values */
 };
 
@@ -504,6 +505,7 @@ static bool scan(struct input *in, struct token *result)
  * Interpreter
  *--------------------------------------------------------------*/
 struct interpreter;
+static void interpret_quot(struct interpreter *terp, struct array *q);
 
 typedef void (*prim_fn)(struct interpreter *);
 
@@ -511,6 +513,12 @@ struct primitive {
 	struct list_head list;
 	char *name;
 	prim_fn fn;
+};
+
+struct def {
+	struct list_head list;
+	struct word *w;
+	struct array *body;
 };
 
 struct dynamic_scope {
@@ -526,6 +534,7 @@ struct interpreter {
 	struct list_head prims;
 	struct stack stack;
 	struct token tok;
+	struct list_head definitions;
 };
 
 static void init_interpreter(struct interpreter *terp)
@@ -533,6 +542,7 @@ static void init_interpreter(struct interpreter *terp)
 	memset(terp, 0, sizeof(*terp));
 	INIT_LIST_HEAD(&terp->prims);
 	init_stack(&terp->stack);
+	INIT_LIST_HEAD(&terp->definitions);
 }
 
 static void add_primitive(struct interpreter *terp, const char *name, prim_fn fn)
@@ -570,6 +580,21 @@ static int cmp_str_tok(const char *str, const char *b, const char *e)
 		return 1;
 }
 
+static bool word_eq(struct word *lhs, struct word *rhs)
+{
+	const char *p1 = lhs->b;
+	const char *p2 = rhs->b;
+
+	while (p1 != lhs->e && p2 != rhs->e) {
+		if (*p1 != *p2)
+			return false;
+
+		p1++, p2++;
+	}
+
+	return p1 == lhs->e && p2 == rhs->e;
+}
+
 static struct primitive *find_primitive(struct interpreter *terp, const char *b, const char *e)
 {
 	struct primitive *p;
@@ -581,12 +606,32 @@ static struct primitive *find_primitive(struct interpreter *terp, const char *b,
 	return NULL;
 }
 
+static void add_word_def(struct interpreter *terp, struct word *w, struct array *body)
+{
+	struct def *d = zalloc(DEF, sizeof(*d));
+	list_add(&d->list, &terp->definitions);
+	d->w = w;
+	d->body = body;
+}
+
+static struct array *find_word_def(struct interpreter *terp, struct word *w)
+{
+	struct def *d;
+
+	list_for_each_entry (d, &terp->definitions, list)
+		if (word_eq(w, d->w))
+			return d->body;
+
+	return NULL;
+}
+
 static void interpret(struct interpreter *terp, struct input_source *in)
 {
 	const char *b;
 	struct primitive *p;
 	value_t v;
 	struct word *w;
+	struct array *body;
 	struct header *h;
 
 	while (in->next_value(in, &v)) {
@@ -617,16 +662,42 @@ static void interpret(struct interpreter *terp, struct input_source *in)
 			case WORD:
 				w = (struct word *) as_ref(v);
 				p = find_primitive(terp, w->b, w->e);
-				if (!p) {
+				if (p) {
+					p->fn(terp);
+					break;
+				}
+
+				body = find_word_def(terp, w);
+				if (body) {
+					interpret_quot(terp, body);
+					break;
+				}
+
+				if (*w->b == ':') {
+					value_t w, body, v;
+
+					if (!in->next_value(in, &w)) {
+						fprintf(stderr, "bad definition");
+						exit(1);
+					}
+
+					body = mk_quot();
+					while (in->next_value(in, &v))
+						append_array(body, v);
+
+					add_word_def(terp, as_ref(w), as_ref(body));
+					break;
+				}
+
+				{
 					// FIXME: add better error handling
 					fprintf(stderr, "couldn't find primitive '");
 					for (b = w->b; b != w->e; b++)
 						fprintf(stderr, "%c", *b);
 					fprintf(stderr, "'\n");
 					exit(1);
+				}
 
-				} else
-					p->fn(terp);
 				break;
 
 			case QUOT:
@@ -635,6 +706,10 @@ static void interpret(struct interpreter *terp, struct input_source *in)
 
 			case FIXNUM:
 				fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
+				break;
+
+			case DEF:
+				fprintf(stderr, "unexpected def\n");
 				break;
 			}
 		}
@@ -715,6 +790,9 @@ static bool string_next_value(struct input_source *in, value_t *r)
 			return false;
 
 		} else if (*ss->tok.begin == ']') {
+			return false;
+
+		} else if (*ss->tok.begin == ';') {
 			return false;
 
 		} else
