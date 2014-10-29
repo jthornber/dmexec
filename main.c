@@ -11,7 +11,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "list.h"
+#include "interpreter.h"
+#include "primitives.h"
 
 /*----------------------------------------------------------------
  * Math utils
@@ -26,16 +27,6 @@ unsigned round_up(unsigned n, unsigned pow)
  *
  * The bottom 2 bits are used for tagging.
  *--------------------------------------------------------------*/
-enum tag {
-	TAG_REF = 0,
-	TAG_FIXNUM = 1,
-	TAG_FALSE
-};
-
-typedef union value {
-	void *ptr;
-	int32_t i;
-} value_t;
 
 static enum tag get_tag(value_t v)
 {
@@ -267,7 +258,7 @@ static struct string *clone_string(struct string *orig)
 	return new;
 }
 
-static value_t mk_string(const char *b, const char *e)
+value_t mk_string(const char *b, const char *e)
 {
 	unsigned len = e - b;
 	struct string *s = alloc_string(len);
@@ -398,37 +389,30 @@ static void print_value(FILE *stream, value_t v)
 /*----------------------------------------------------------------
  * Stack engine
  *--------------------------------------------------------------*/
-#define MAX_STACK 8192
-
-struct stack {
-	unsigned nr_entries;
-	value_t values[MAX_STACK];
-};
-
-static void init_stack(struct stack *s)
+void init_stack(struct stack *s)
 {
 	s->nr_entries = 0;
 }
 
-static void push(struct stack *s, value_t v)
+void push(struct stack *s, value_t v)
 {
 	assert(s->nr_entries < MAX_STACK);
 	s->values[s->nr_entries++] = v;
 }
 
-static value_t peek(struct stack *s)
+value_t peek(struct stack *s)
 {
 	assert(s->nr_entries);
 	return s->values[s->nr_entries - 1];
 }
 
-static value_t peekn(struct stack *s, unsigned n)
+value_t peekn(struct stack *s, unsigned n)
 {
 	assert(s->nr_entries > n);
 	return s->values[s->nr_entries - n - 1];
 }
 
-static value_t pop(struct stack *s)
+value_t pop(struct stack *s)
 {
 	assert(s->nr_entries);
 	s->nr_entries--;
@@ -439,26 +423,6 @@ static value_t pop(struct stack *s)
 /*----------------------------------------------------------------
  * Lexer
  *--------------------------------------------------------------*/
-enum token_type {
-	TOK_FIXNUM,
-	TOK_STRING,
-	TOK_WORD,
-	TOK_COLON,
-	TOK_SEMI_COLON,
-	TOK_OPEN_BRACE,
-	TOK_CLOSE_BRACE,
-	TOK_OPEN_SQUARE,
-	TOK_CLOSE_SQUARE
-};
-
-struct token {
-	enum token_type type;
-	const char *begin;
-	const char *end;
-
-	int fixnum;
-};
-
 struct input {
 	const char *begin;
 	const char *end;
@@ -566,8 +530,6 @@ static bool scan(struct input *in, struct token *result)
 struct interpreter;
 static void interpret_quot(struct interpreter *terp, struct array *q);
 
-typedef void (*prim_fn)(struct interpreter *);
-
 struct primitive {
 	struct list_head list;
 	char *name;
@@ -589,18 +551,6 @@ struct input_source {
 	bool (*next_value)(struct input_source *in, value_t *v);
 };
 
-struct interpreter {
-	struct list_head prims;
-	struct stack stack;
-	struct token tok;
-	struct list_head definitions;
-};
-
-#define PUSH(v) push(&terp->stack, v)
-#define POP() pop(&terp->stack)
-#define PEEK() peek(&terp->stack)
-#define PEEKN(n) peekn(&terp->stack, n)
-
 static void init_interpreter(struct interpreter *terp)
 {
 	memset(terp, 0, sizeof(*terp));
@@ -609,7 +559,7 @@ static void init_interpreter(struct interpreter *terp)
 	INIT_LIST_HEAD(&terp->definitions);
 }
 
-static void add_primitive(struct interpreter *terp, const char *name, prim_fn fn)
+void add_primitive(struct interpreter *terp, const char *name, prim_fn fn)
 {
 	// FIXME: should this be managed by the mm?
 	struct primitive *p = malloc(sizeof(*p));
@@ -1156,6 +1106,7 @@ int main(int argc, char **argv)
 
 	init_interpreter(&terp);
 	add_primitives(&terp);
+	add_dm_primitives(&terp);
 
 	if (argc == 2)
 		interpret_file(&terp, argv[1]);
