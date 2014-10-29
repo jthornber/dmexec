@@ -107,6 +107,15 @@ struct header {
 /*----------------------------------------------------------------
  * Memory manager
  *--------------------------------------------------------------*/
+static struct {
+	size_t total_allocated;
+	size_t total_collected;
+	size_t current_allocated;
+	size_t max_allocated;
+	unsigned nr_gcs;
+
+} memory_stats_;
+
 static void out_of_memory()
 {
 	fprintf(stderr, "Out of memory.\n");
@@ -115,7 +124,8 @@ static void out_of_memory()
 
 static void *alloc(enum object_type type, size_t s)
 {
-	struct header *h = malloc(s + sizeof(*h));
+	size_t len = s + sizeof(struct header);
+	struct header *h = malloc(len);
 
 	if (!h)
 		out_of_memory();
@@ -124,6 +134,7 @@ static void *alloc(enum object_type type, size_t s)
 	h->size = s;
 	h->magic = HEADER_MAGIC;
 
+	memory_stats_.total_allocated += len;
 	return ((char *) (h + 1));
 }
 
@@ -1150,4 +1161,8 @@ int main(int argc, char **argv)
 		interpret_file(&terp, argv[1]);
 
 	repl(&terp);
+	printf("\n\ntotal allocated: %llu\n",
+	       (unsigned long long) memory_stats_.total_allocated);
+
+	return 0;
 }
