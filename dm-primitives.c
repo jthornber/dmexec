@@ -35,6 +35,10 @@ static void dm_version(struct interpreter *terp)
 	}
 
 	memset(&ctl, 0, sizeof(ctl));
+
+	ctl.version[0] = DM_VERSION_MAJOR;
+	ctl.version[1] = DM_VERSION_MINOR;
+	ctl.version[2] = DM_VERSION_PATCHLEVEL;
 	ctl.data_size = sizeof(ctl);
 	ctl.data_start = sizeof(ctl);
 
