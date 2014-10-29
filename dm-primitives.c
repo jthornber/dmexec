@@ -25,8 +25,9 @@ static int open_control_file()
 
 static void dm_version(struct interpreter *terp)
 {
-	struct dm_ioctl ctl;
 	int r, fd;
+	char buffer[128];
+	struct dm_ioctl ctl;
 
 	fd = open_control_file();
 	if (fd < 0) {
@@ -48,12 +49,9 @@ static void dm_version(struct interpreter *terp)
 		return;
 	}
 
-	{
-		char buffer[128];
-		snprintf(buffer, sizeof(buffer), "%u.%u.%u",
-			 ctl.version[0], ctl.version[1], ctl.version[2]);
-		PUSH(mk_c_string(buffer));
-	}
+	snprintf(buffer, sizeof(buffer), "%u.%u.%u",
+		 ctl.version[0], ctl.version[1], ctl.version[2]);
+	PUSH(mk_c_string(buffer));
 }
 
 /*----------------------------------------------------------------*/
