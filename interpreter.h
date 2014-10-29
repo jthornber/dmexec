@@ -1,6 +1,7 @@
 #ifndef DMEXEC_INTERPRETER_H
 #define DMEXEC_INTERPRETER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "list.h"
@@ -67,6 +68,37 @@ typedef void (*prim_fn)(struct interpreter *);
 
 value_t mk_string(const char *b, const char *e);
 void add_primitive(struct interpreter *terp, const char *name, prim_fn fn);
+
+enum object_type {
+	STRING,
+	BYTE_ARRAY,
+	TUPLE,
+	WORD,
+	QUOT,
+	ARRAY,
+	DEF,
+	FIXNUM			/* these are always tagged immediate values */
+};
+
+enum object_type get_type(value_t v);
+
+#define MAX_ARRAY_SIZE 32
+
+// FIXME: add dynamic resizing
+struct array {
+	unsigned nr_elts;
+	value_t elts[MAX_ARRAY_SIZE]; /* yee haa! */
+};
+
+void interpret_quot(struct interpreter *terp, struct array *q);
+
+void *as_ref(value_t v);
+value_t mk_quot();
+void append_array(value_t av, value_t v);
+void print_value(FILE *stream, value_t v);
+unsigned as_fixnum(value_t v);
+value_t mk_fixnum(int i);
+bool is_false(value_t v);
 
 /*----------------------------------------------------------------*/
 

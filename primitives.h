@@ -5,6 +5,7 @@
 
 /*----------------------------------------------------------------*/
 
+void add_basic_primitives(struct interpreter *terp);
 void add_dm_primitives(struct interpreter *terp);
 
 /*----------------------------------------------------------------*/

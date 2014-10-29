@@ -19,6 +19,7 @@ INCLUDES=\
 LIBS=
 
 SOURCE=\
+	basic_primitives.c \
 	main.c \
 	dm-primitives.c
 
