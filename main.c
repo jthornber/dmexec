@@ -824,7 +824,7 @@ static void interpret_string(struct interpreter *terp, const char *b, const char
 	interpret(terp, &in.source);
 }
 
-static void interpret_file(struct interpreter *terp, const char *path)
+static void load_file(struct interpreter *terp, const char *path)
 {
 	int fd;
 	struct stat info;
@@ -849,6 +849,9 @@ static void interpret_file(struct interpreter *terp, const char *path)
 	e = b + info.st_size;
 
 	interpret_string(terp, b, e);
+
+	munmap(b, info.st_size);
+	close(fd);
 }
 
 /*----------------------------------------------------------------
@@ -1108,8 +1111,7 @@ int main(int argc, char **argv)
 	add_primitives(&terp);
 	add_dm_primitives(&terp);
 
-	if (argc == 2)
-		interpret_file(&terp, argv[1]);
+	load_file(&terp, "prelude.dm");
 
 	repl(&terp);
 	printf("\n\ntotal allocated: %llu\n",
