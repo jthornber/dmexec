@@ -23,11 +23,19 @@ static int open_control_file()
 	return open(buffer, O_RDWR | O_EXCL);
 }
 
-static void dm_version(struct interpreter *terp)
+static void init_ctl(struct dm_ioctl *ctl)
+{
+	memset(ctl, 0, sizeof(*ctl));
+	ctl->version[0] = DM_VERSION_MAJOR;
+	ctl->version[1] = DM_VERSION_MINOR;
+	ctl->version[2] = DM_VERSION_PATCHLEVEL;
+	ctl->data_size = sizeof(*ctl);
+	ctl->data_start = sizeof(*ctl);
+}
+
+static void dm_ioctl(struct interpreter *terp, int request, void *payload)
 {
 	int r, fd;
-	char buffer[128];
-	struct dm_ioctl ctl;
 
 	fd = open_control_file();
 	if (fd < 0) {
@@ -35,23 +43,32 @@ static void dm_version(struct interpreter *terp)
 		return;
 	}
 
-	memset(&ctl, 0, sizeof(ctl));
-
-	ctl.version[0] = DM_VERSION_MAJOR;
-	ctl.version[1] = DM_VERSION_MINOR;
-	ctl.version[2] = DM_VERSION_PATCHLEVEL;
-	ctl.data_size = sizeof(ctl);
-	ctl.data_start = sizeof(ctl);
-
-	r = ioctl(fd, DM_VERSION, &ctl);
+	r = ioctl(fd, DM_VERSION, payload);
 	if (r < 0) {
 		PUSH(mk_c_string("ioctl call failed"));
 		return;
 	}
+}
 
+static void dm_version(struct interpreter *terp)
+{
+	char buffer[128];
+	struct dm_ioctl ctl;
+
+	init_ctl(&ctl);
+	dm_ioctl(terp, DM_VERSION, &ctl);
 	snprintf(buffer, sizeof(buffer), "%u.%u.%u",
 		 ctl.version[0], ctl.version[1], ctl.version[2]);
 	PUSH(mk_c_string(buffer));
+}
+
+static void dm_remove_all(struct interpreter *terp)
+{
+	struct dm_ioctl ctl;
+
+	init_ctl(&ctl);
+	dm_ioctl(terp, DM_REMOVE_ALL, &ctl);
+	PUSH(mk_c_string("ok"));
 }
 
 /*----------------------------------------------------------------*/
@@ -59,6 +76,7 @@ static void dm_version(struct interpreter *terp)
 void add_dm_primitives(struct interpreter *terp)
 {
 	add_primitive(terp, "dm-version", dm_version);
+	add_primitive(terp, "dm-remove-all", dm_remove_all);
 }
 
 /*----------------------------------------------------------------*/
