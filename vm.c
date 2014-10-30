@@ -755,27 +755,29 @@ static bool string_next_value(struct input_source *in, value_t *r)
 		break;
 
 	case TOK_WORD:
-		// FIXME: do a full compare of the tokens
-		if (*ss->tok.begin == 'f' && ss->tok.end == ss->tok.begin + 1) {
+		/*
+		 * Syntax words should be evaluated immediately.
+		 */
+		if (!cmp_str_tok("f", ss->tok.begin, ss->tok.end)) {
 			*r = mk_false();
 
-		} else if (*ss->tok.begin == '{') {
+		} else if (!cmp_str_tok("{", ss->tok.begin, ss->tok.end)) {
 			*r = mk_array();
 			while (string_next_value(in, &r2))
 				append_array(*r, r2);
 
-		} else if (*ss->tok.begin == '[') {
+		} else if (!cmp_str_tok("[", ss->tok.begin, ss->tok.end)) {
 			*r = mk_quot();
 			while (string_next_value(in, &r2))
 				append_array(*r, r2);
 
-		} else if (*ss->tok.begin == '}') {
+		} else if (!cmp_str_tok("}", ss->tok.begin, ss->tok.end)) {
 			return false;
 
-		} else if (*ss->tok.begin == ']') {
+		} else if (!cmp_str_tok("]", ss->tok.begin, ss->tok.end)) {
 			return false;
 
-		} else if (*ss->tok.begin == ';') {
+		} else if (!cmp_str_tok(";", ss->tok.begin, ss->tok.end)) {
 			return false;
 
 		} else
