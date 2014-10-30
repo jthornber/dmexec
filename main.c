@@ -258,7 +258,7 @@ value_t mk_string(const char *b, const char *e)
 /*----------------------------------------------------------------
  * Arrays
  *--------------------------------------------------------------*/
-static value_t mk_array()
+value_t mk_array()
 {
 	struct array *a = alloc(ARRAY, sizeof(*a));
 	memset(a, 0, sizeof(*a));

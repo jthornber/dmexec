@@ -94,6 +94,7 @@ void interpret_quot(struct interpreter *terp, struct array *q);
 
 void *as_ref(value_t v);
 value_t mk_quot();
+value_t mk_array();
 void append_array(value_t av, value_t v);
 void print_value(FILE *stream, value_t v);
 unsigned as_fixnum(value_t v);
