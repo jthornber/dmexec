@@ -20,8 +20,8 @@ LIBS=
 
 SOURCE=\
 	basic_primitives.c \
-	main.c \
-	dm-primitives.c
+	dm-primitives.c \
+	vm.c \
 
 OBJECTS:=$(subst .c,.o,$(SOURCE))
 DEPENDS:=$(subst .c,.d,$(SOURCE))

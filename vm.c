@@ -10,7 +10,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "interpreter.h"
+#include "vm.h"
 #include "primitives.h"
 
 /*----------------------------------------------------------------

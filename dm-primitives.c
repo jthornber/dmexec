@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "interpreter.h"
+#include "vm.h"
 #include "primitives.h"
 
 /*----------------------------------------------------------------*/

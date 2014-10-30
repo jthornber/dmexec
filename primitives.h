@@ -1,7 +1,7 @@
 #ifndef DMEXEC_PRIMITIVES_H
 #define DMEXEC_PRIMITIVES_H
 
-#include "interpreter.h"
+#include "vm.h"
 
 /*----------------------------------------------------------------*/
 
