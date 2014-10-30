@@ -29,7 +29,7 @@ struct stack {
 struct code_position {
 	struct list_head list;
 	struct array *code;
-	unsigned pc;
+	unsigned position;
 };
 
 void init_stack(struct stack *s);
@@ -74,6 +74,9 @@ typedef void (*prim_fn)(struct interpreter *);
 #define PEEK() peek(&terp->stack)
 #define PEEKN(n) peekn(&terp->stack, n)
 
+void push_call(struct interpreter *terp, struct array *code);
+void pop_call(struct interpreter *terp);
+
 value_t mk_string(const char *b, const char *e);
 void add_primitive(struct interpreter *terp, const char *name, prim_fn fn);
 
@@ -85,6 +88,7 @@ enum object_type {
 	QUOT,
 	ARRAY,
 	DEF,
+	CODE_POSITION,
 	FIXNUM			/* these are always tagged immediate values */
 };
 

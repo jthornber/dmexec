@@ -8,6 +8,7 @@ V=@
 RM:=rm -f
 CC:=gcc
 CFLAGS=\
+	-g \
 	-Wall \
 	-D_GNU_SOURCE \
 	-std=c99 \

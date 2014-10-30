@@ -522,10 +522,6 @@ struct dynamic_scope {
 	struct list_head definitions;
 };
 
-struct input_source {
-	bool (*next_value)(struct input_source *in, value_t *v);
-};
-
 static void init_interpreter(struct interpreter *terp)
 {
 	memset(terp, 0, sizeof(*terp));
@@ -600,85 +596,105 @@ static struct array *find_word_def(struct interpreter *terp, struct word *w)
 	return NULL;
 }
 
-void eval(struct interpreter *terp, struct array *code)
+void push_call(struct interpreter *terp, struct array *code)
+{
+	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
+	pc->code = code;
+	pc->position = 0;
+	list_add(&pc->list, &terp->call_stack);
+}
+
+void pop_call(struct interpreter *terp)
+{
+	struct code_position *pc = list_first_entry(&terp->call_stack, struct code_position, list);
+	list_del(&pc->list);
+}
+
+static void inc_pc(struct interpreter *terp)
+{
+	if (!list_empty(&terp->call_stack)) {
+		struct code_position *pc = list_first_entry(&terp->call_stack, struct code_position, list);
+		if (++pc->position == pc->code->nr_elts)
+			pop_call(terp);
+	}
+}
+
+static void eval_value(struct interpreter *terp, value_t v)
 {
 	const char *b;
 	struct primitive *p;
-	value_t v;
 	struct word *w;
 	struct array *body;
 	struct header *h;
-	unsigned i;
 
-	for (i = 0; i < code->nr_elts; i++ ) {
-		v = code->elts[i];
+	switch (get_tag(v)) {
+	case TAG_FIXNUM:
+		PUSH(v);
+		break;
 
-		switch (get_tag(v)) {
-		case TAG_FIXNUM:
-			push(&terp->stack, v);
-			break;
+	case TAG_FALSE:
+		PUSH(v);
+		break;
 
-		case TAG_FALSE:
+	case TAG_REF:
+		h = get_header(v);
+		switch (h->type) {
+		case STRING:
+		case ARRAY:
+		case BYTE_ARRAY:
+		case TUPLE:
+		case QUOT:
 			PUSH(v);
 			break;
 
-		case TAG_REF:
-			h = get_header(v);
-			switch (h->type) {
-			case STRING:
-				push(&terp->stack, v);
-				break;
-
-			case ARRAY:
-				push(&terp->stack, v);
-				break;
-
-			case BYTE_ARRAY:
-				push(&terp->stack, v);
-				break;
-
-			case TUPLE:
-				push(&terp->stack, v);
-				break;
-
-			case WORD:
-				w = (struct word *) as_ref(v);
-				p = find_primitive(terp, w->b, w->e);
-				if (p) {
-					p->fn(terp);
-					break;
-				}
-
-				body = find_word_def(terp, w);
-				if (body) {
-					eval(terp, body);
-					break;
-				}
-
-
-				{
-					// FIXME: add better error handling
-					fprintf(stderr, "couldn't find primitive '");
-					for (b = w->b; b != w->e; b++)
-						fprintf(stderr, "%c", *b);
-					fprintf(stderr, "'\n");
-					exit(1);
-				}
-
-				break;
-
-			case QUOT:
-				push(&terp->stack, v);
-				break;
-
-			case FIXNUM:
-				fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
-				break;
-
-			case DEF:
-				fprintf(stderr, "unexpected def\n");
+		case WORD:
+			w = (struct word *) as_ref(v);
+			p = find_primitive(terp, w->b, w->e);
+			if (p) {
+				p->fn(terp);
 				break;
 			}
+
+			body = find_word_def(terp, w);
+			if (body) {
+				push_call(terp, body);
+				break;
+			}
+
+			{
+				// FIXME: add better error handling
+				fprintf(stderr, "couldn't find primitive '");
+				for (b = w->b; b != w->e; b++)
+					fprintf(stderr, "%c", *b);
+				fprintf(stderr, "'\n");
+				exit(1);
+			}
+			break;
+
+		case FIXNUM:
+			fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
+			break;
+
+		case CODE_POSITION:
+		case DEF:
+			fprintf(stderr, "unexpected value\n");
+			break;
+		}
+	}
+}
+
+void eval(struct interpreter *terp, struct array *code)
+{
+	value_t v;
+	struct code_position *pc;
+
+	if (code->nr_elts) {
+		push_call(terp, code);
+		while (!list_empty(&terp->call_stack)) {
+			pc = list_first_entry(&terp->call_stack, struct code_position, list);
+			v = pc->code->elts[pc->position];
+			inc_pc(terp);
+			eval_value(terp, v);
 		}
 	}
 }
@@ -687,20 +703,18 @@ void eval(struct interpreter *terp, struct array *code)
  * String source
  *--------------------------------------------------------------*/
 struct string_source {
-	struct input_source source;
-
 	struct input in;
 	struct token tok;
 };
 
-static bool string_next_value(struct interpreter *terp, struct input_source *in, value_t *r);
+static bool string_next_value(struct interpreter *terp, struct string_source *in, value_t *r);
 
 static bool syntax_quot(struct interpreter *terp, struct string_source *ss, value_t *r)
 {
 	value_t r2;
 
 	*r = mk_quot();
-	while (string_next_value(terp, &ss->source, &r2) &&
+	while (string_next_value(terp, ss, &r2) &&
 	       cmp_str_tok("]", ss->tok.begin, ss->tok.end))
 		append_array(*r, r2);
 
@@ -712,7 +726,7 @@ static bool syntax_array(struct interpreter *terp, struct string_source *ss, val
 	value_t r2;
 
 	*r = mk_array();
-	while (string_next_value(terp, &ss->source, &r2) &&
+	while (string_next_value(terp, ss, &r2) &&
 	       cmp_str_tok("}", ss->tok.begin, ss->tok.end))
 		append_array(*r, r2);
 
@@ -723,23 +737,21 @@ static void syntax_definition(struct interpreter *terp, struct string_source *ss
 {
 	value_t w, body, v;
 
-	if (!string_next_value(terp, &ss->source, &w)) {
+	if (!string_next_value(terp, ss, &w)) {
 		fprintf(stderr, "bad definition");
 		exit(1);
 	}
 
 	body = mk_quot();
-	while (string_next_value(terp, &ss->source, &v) &&
+	while (string_next_value(terp, ss, &v) &&
 	       cmp_str_tok(";", ss->tok.begin, ss->tok.end))
 		append_array(body, v);
 
 	add_word_def(terp, as_ref(w), as_ref(body));
 }
 
-static bool string_next_value(struct interpreter *terp, struct input_source *in, value_t *r)
+static bool string_next_value(struct interpreter *terp, struct string_source *ss, value_t *r)
 {
-	struct string_source *ss = container_of(in, struct string_source, source);
-
 	if (!scan(&ss->in, &ss->tok))
 		return false;
 
@@ -767,7 +779,7 @@ static bool string_next_value(struct interpreter *terp, struct input_source *in,
 
 		else if (!cmp_str_tok(":", ss->tok.begin, ss->tok.end)) {
 			syntax_definition(terp, ss);
-			return string_next_value(terp, in, r);
+			return string_next_value(terp, ss, r);
 
 		} else
 			*r = mk_word(ss->tok.begin, ss->tok.end);
@@ -790,7 +802,7 @@ static struct array *_read(struct interpreter *terp, const char *b, const char *
 	in.in.begin = b;
 	in.in.end = e;
 
-	while (string_next_value(terp, &in.source, &v))
+	while (string_next_value(terp, &in, &v))
 		append_array(a, v);
 
 	return as_ref(a);
@@ -801,6 +813,7 @@ static void load_file(struct interpreter *terp, const char *path)
 	int fd;
 	struct stat info;
 	char *b, *e;
+	struct array *code;
 
 	if (stat(path, &info) < 0) {
 		fprintf(stderr, "couldn't stat '%s'\n", path);
@@ -820,7 +833,8 @@ static void load_file(struct interpreter *terp, const char *path)
 	}
 	e = b + info.st_size;
 
-	eval(terp, _read(terp, b, e));
+	code = _read(terp, b, e);
+	eval(terp, code);
 	munmap(b, info.st_size);
 	close(fd);
 }

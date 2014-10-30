@@ -22,7 +22,7 @@ static void call(struct interpreter *terp)
 		exit(1);
 	}
 
-	eval(terp, as_ref(maybe_q));
+	push_call(terp, as_ref(maybe_q));
 }
 
 static void curry(struct interpreter *terp)
@@ -121,9 +121,11 @@ static void dip(struct interpreter *terp)
 {
 	value_t q = POP();
 	value_t x = POP();
+	value_t after = mk_quot();
+	append_array(after, x);
+	push_call(terp, as_ref(after));
 	PUSH(q);
 	call(terp);
-	PUSH(x);
 }
 
 static void fixnum_add(struct interpreter *terp)
@@ -178,7 +180,7 @@ static void each(struct interpreter *terp)
 	ary = as_ref(a);
 	for (i = 0; i < ary->nr_elts; i++) {
 		PUSH(ary->elts[i]);
-		eval(terp, as_ref(q));
+		push_call(terp, as_ref(q));
 	}
 }
 
