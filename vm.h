@@ -26,6 +26,12 @@ struct stack {
 	value_t values[MAX_STACK];
 };
 
+struct code_position {
+	struct list_head list;
+	struct array *code;
+	unsigned pc;
+};
+
 void init_stack(struct stack *s);
 void push(struct stack *s, value_t v);
 value_t peek(struct stack *s);
@@ -54,9 +60,11 @@ struct token {
 
 struct interpreter {
 	struct list_head prims;
-	struct stack stack;
 	struct token tok;
 	struct list_head definitions;
+
+	struct stack stack;
+	struct list_head call_stack;
 };
 
 typedef void (*prim_fn)(struct interpreter *);
@@ -90,8 +98,7 @@ struct array {
 	value_t elts[MAX_ARRAY_SIZE]; /* yee haa! */
 };
 
-void interpret_quot(struct interpreter *terp, struct array *q);
-
+void eval(struct interpreter *terp, struct array *code);
 void *as_ref(value_t v);
 value_t mk_quot();
 value_t mk_array();

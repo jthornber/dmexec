@@ -22,7 +22,7 @@ static void call(struct interpreter *terp)
 		exit(1);
 	}
 
-	interpret_quot(terp, as_ref(maybe_q));
+	eval(terp, as_ref(maybe_q));
 }
 
 static void curry(struct interpreter *terp)
@@ -178,7 +178,7 @@ static void each(struct interpreter *terp)
 	ary = as_ref(a);
 	for (i = 0; i < ary->nr_elts; i++) {
 		PUSH(ary->elts[i]);
-		interpret_quot(terp, as_ref(q));
+		eval(terp, as_ref(q));
 	}
 }
 

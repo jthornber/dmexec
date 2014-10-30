@@ -505,8 +505,6 @@ static bool scan(struct input *in, struct token *result)
 /*----------------------------------------------------------------
  * Interpreter
  *--------------------------------------------------------------*/
-struct interpreter;
-
 struct primitive {
 	struct list_head list;
 	char *name;
@@ -532,8 +530,9 @@ static void init_interpreter(struct interpreter *terp)
 {
 	memset(terp, 0, sizeof(*terp));
 	INIT_LIST_HEAD(&terp->prims);
-	init_stack(&terp->stack);
 	INIT_LIST_HEAD(&terp->definitions);
+	init_stack(&terp->stack);
+	INIT_LIST_HEAD(&terp->call_stack);
 }
 
 void add_primitive(struct interpreter *terp, const char *name, prim_fn fn)
@@ -601,7 +600,7 @@ static struct array *find_word_def(struct interpreter *terp, struct word *w)
 	return NULL;
 }
 
-static void interpret(struct interpreter *terp, struct input_source *in)
+void eval(struct interpreter *terp, struct array *code)
 {
 	const char *b;
 	struct primitive *p;
@@ -609,8 +608,11 @@ static void interpret(struct interpreter *terp, struct input_source *in)
 	struct word *w;
 	struct array *body;
 	struct header *h;
+	unsigned i;
 
-	while (in->next_value(in, &v)) {
+	for (i = 0; i < code->nr_elts; i++ ) {
+		v = code->elts[i];
+
 		switch (get_tag(v)) {
 		case TAG_FIXNUM:
 			push(&terp->stack, v);
@@ -649,25 +651,10 @@ static void interpret(struct interpreter *terp, struct input_source *in)
 
 				body = find_word_def(terp, w);
 				if (body) {
-					interpret_quot(terp, body);
+					eval(terp, body);
 					break;
 				}
 
-				if (*w->b == ':') {
-					value_t w, body, v;
-
-					if (!in->next_value(in, &w)) {
-						fprintf(stderr, "bad definition");
-						exit(1);
-					}
-
-					body = mk_quot();
-					while (in->next_value(in, &v))
-						append_array(body, v);
-
-					add_word_def(terp, as_ref(w), as_ref(body));
-					break;
-				}
 
 				{
 					// FIXME: add better error handling
@@ -697,37 +684,6 @@ static void interpret(struct interpreter *terp, struct input_source *in)
 }
 
 /*----------------------------------------------------------------
- * Quot source
- *--------------------------------------------------------------*/
-struct quot_source {
-	struct input_source source;
-	struct array *quot;
-	unsigned index;
-};
-
-static bool quot_next_value(struct input_source *in, value_t *r)
-{
-	struct quot_source *qs = container_of(in, struct quot_source, source);
-	if (qs->index < qs->quot->nr_elts) {
-		*r = qs->quot->elts[qs->index++];
-		return true;
-	}
-
-	return false;
-}
-
-void interpret_quot(struct interpreter *terp, struct array *q)
-{
-	struct quot_source in;
-
-	in.source.next_value = quot_next_value;
-	in.quot = q;
-	in.index = 0;
-
-	interpret(terp, &in.source);
-}
-
-/*----------------------------------------------------------------
  * String source
  *--------------------------------------------------------------*/
 struct string_source {
@@ -737,9 +693,51 @@ struct string_source {
 	struct token tok;
 };
 
-static bool string_next_value(struct input_source *in, value_t *r)
+static bool string_next_value(struct interpreter *terp, struct input_source *in, value_t *r);
+
+static bool syntax_quot(struct interpreter *terp, struct string_source *ss, value_t *r)
 {
 	value_t r2;
+
+	*r = mk_quot();
+	while (string_next_value(terp, &ss->source, &r2) &&
+	       cmp_str_tok("]", ss->tok.begin, ss->tok.end))
+		append_array(*r, r2);
+
+	return true;
+}
+
+static bool syntax_array(struct interpreter *terp, struct string_source *ss, value_t *r)
+{
+	value_t r2;
+
+	*r = mk_array();
+	while (string_next_value(terp, &ss->source, &r2) &&
+	       cmp_str_tok("}", ss->tok.begin, ss->tok.end))
+		append_array(*r, r2);
+
+	return true;
+}
+
+static void syntax_definition(struct interpreter *terp, struct string_source *ss)
+{
+	value_t w, body, v;
+
+	if (!string_next_value(terp, &ss->source, &w)) {
+		fprintf(stderr, "bad definition");
+		exit(1);
+	}
+
+	body = mk_quot();
+	while (string_next_value(terp, &ss->source, &v) &&
+	       cmp_str_tok(";", ss->tok.begin, ss->tok.end))
+		append_array(body, v);
+
+	add_word_def(terp, as_ref(w), as_ref(body));
+}
+
+static bool string_next_value(struct interpreter *terp, struct input_source *in, value_t *r)
+{
 	struct string_source *ss = container_of(in, struct string_source, source);
 
 	if (!scan(&ss->in, &ss->tok))
@@ -758,27 +756,18 @@ static bool string_next_value(struct input_source *in, value_t *r)
 		/*
 		 * Syntax words should be evaluated immediately.
 		 */
-		if (!cmp_str_tok("f", ss->tok.begin, ss->tok.end)) {
+		if (!cmp_str_tok("f", ss->tok.begin, ss->tok.end))
 			*r = mk_false();
 
-		} else if (!cmp_str_tok("{", ss->tok.begin, ss->tok.end)) {
-			*r = mk_array();
-			while (string_next_value(in, &r2))
-				append_array(*r, r2);
+		else if (!cmp_str_tok("{", ss->tok.begin, ss->tok.end))
+			return syntax_array(terp, ss, r);
 
-		} else if (!cmp_str_tok("[", ss->tok.begin, ss->tok.end)) {
-			*r = mk_quot();
-			while (string_next_value(in, &r2))
-				append_array(*r, r2);
+		else if (!cmp_str_tok("[", ss->tok.begin, ss->tok.end))
+			return syntax_quot(terp, ss, r);
 
-		} else if (!cmp_str_tok("}", ss->tok.begin, ss->tok.end)) {
-			return false;
-
-		} else if (!cmp_str_tok("]", ss->tok.begin, ss->tok.end)) {
-			return false;
-
-		} else if (!cmp_str_tok(";", ss->tok.begin, ss->tok.end)) {
-			return false;
+		else if (!cmp_str_tok(":", ss->tok.begin, ss->tok.end)) {
+			syntax_definition(terp, ss);
+			return string_next_value(terp, in, r);
 
 		} else
 			*r = mk_word(ss->tok.begin, ss->tok.end);
@@ -792,15 +781,19 @@ static bool string_next_value(struct input_source *in, value_t *r)
 	return true;
 }
 
-static void interpret_string(struct interpreter *terp, const char *b, const char *e)
+static struct array *_read(struct interpreter *terp, const char *b, const char *e)
 {
+	value_t v;
 	struct string_source in;
+	value_t a = mk_array();
 
-	in.source.next_value = string_next_value;
 	in.in.begin = b;
 	in.in.end = e;
 
-	interpret(terp, &in.source);
+	while (string_next_value(terp, &in.source, &v))
+		append_array(a, v);
+
+	return as_ref(a);
 }
 
 static void load_file(struct interpreter *terp, const char *path)
@@ -827,8 +820,7 @@ static void load_file(struct interpreter *terp, const char *path)
 	}
 	e = b + info.st_size;
 
-	interpret_string(terp, b, e);
-
+	eval(terp, _read(terp, b, e));
 	munmap(b, info.st_size);
 	close(fd);
 }
@@ -858,7 +850,7 @@ static int repl(struct interpreter *terp)
 		if (!fgets(buffer, sizeof(buffer), stdin))
 			break;
 
-		interpret_string(terp, buffer, buffer + strlen(buffer));
+		eval(terp, _read(terp, buffer, buffer + strlen(buffer)));
 		print_stack(&terp->stack);
 	}
 
