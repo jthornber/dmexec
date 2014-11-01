@@ -60,7 +60,6 @@ struct token {
 
 struct vm {
 	struct list_head prims;
-	struct token tok;
 	struct list_head definitions;
 
 	struct stack stack;
