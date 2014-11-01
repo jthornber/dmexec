@@ -33,7 +33,7 @@ static void init_ctl(struct dm_ioctl *ctl, size_t data_size)
 	ctl->data_start = sizeof(*ctl);
 }
 
-static int dm_ioctl(struct interpreter *terp, int request, void *payload)
+static int dm_ioctl(struct vm *vm, int request, void *payload)
 {
 	int r, fd;
 
@@ -50,13 +50,13 @@ static int dm_ioctl(struct interpreter *terp, int request, void *payload)
 	return r;
 }
 
-static void dm_version(struct interpreter *terp)
+static void dm_version(struct vm *vm)
 {
 	char buffer[128];
 	struct dm_ioctl ctl;
 
 	init_ctl(&ctl, sizeof(ctl));
-	if (dm_ioctl(terp, DM_VERSION, &ctl) < 0)
+	if (dm_ioctl(vm, DM_VERSION, &ctl) < 0)
 		return;
 
 	snprintf(buffer, sizeof(buffer), "%u.%u.%u",
@@ -64,18 +64,18 @@ static void dm_version(struct interpreter *terp)
 	PUSH(mk_c_string(buffer));
 }
 
-static void dm_remove_all(struct interpreter *terp)
+static void dm_remove_all(struct vm *vm)
 {
 	struct dm_ioctl ctl;
 
 	init_ctl(&ctl, sizeof(ctl));
-	if (dm_ioctl(terp, DM_REMOVE_ALL, &ctl) < 0)
+	if (dm_ioctl(vm, DM_REMOVE_ALL, &ctl) < 0)
 		return;
 
 	PUSH(mk_c_string("ok"));
 }
 
-static void dm_list_devices(struct interpreter *terp)
+static void dm_list_devices(struct vm *vm)
 {
 	char buffer[8192];	/* FIXME: what if this buffer isn't big enough? */
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
@@ -83,7 +83,7 @@ static void dm_list_devices(struct interpreter *terp)
 	value_t results = mk_array();
 
 	init_ctl(ctl, sizeof(buffer));
-	if (dm_ioctl(terp, DM_LIST_DEVICES, ctl) < 0)
+	if (dm_ioctl(vm, DM_LIST_DEVICES, ctl) < 0)
 		return;
 
 	if (ctl->flags & DM_BUFFER_FULL_FLAG) {
@@ -111,11 +111,11 @@ static void dm_list_devices(struct interpreter *terp)
 
 /*----------------------------------------------------------------*/
 
-void add_dm_primitives(struct interpreter *terp)
+void add_dm_primitives(struct vm *vm)
 {
-	add_primitive(terp, "dm-version", dm_version);
-	add_primitive(terp, "dm-remove-all", dm_remove_all);
-	add_primitive(terp, "dm-list-devices", dm_list_devices);
+	add_primitive(vm, "dm-version", dm_version);
+	add_primitive(vm, "dm-remove-all", dm_remove_all);
+	add_primitive(vm, "dm-list-devices", dm_list_devices);
 }
 
 /*----------------------------------------------------------------*/

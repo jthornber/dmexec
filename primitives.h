@@ -5,8 +5,8 @@
 
 /*----------------------------------------------------------------*/
 
-void add_basic_primitives(struct interpreter *terp);
-void add_dm_primitives(struct interpreter *terp);
+void add_basic_primitives(struct vm *vm);
+void add_dm_primitives(struct vm *vm);
 
 /*----------------------------------------------------------------*/
 

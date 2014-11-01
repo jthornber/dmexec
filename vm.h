@@ -1,5 +1,5 @@
-#ifndef DMEXEC_INTERPRETER_H
-#define DMEXEC_INTERPRETER_H
+#ifndef DMEXEC_VM_H
+#define DMEXEC_VM_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -58,7 +58,7 @@ struct token {
 	int fixnum;
 };
 
-struct interpreter {
+struct vm {
 	struct list_head prims;
 	struct token tok;
 	struct list_head definitions;
@@ -67,18 +67,18 @@ struct interpreter {
 	struct list_head call_stack;
 };
 
-typedef void (*prim_fn)(struct interpreter *);
+typedef void (*prim_fn)(struct vm *);
 
-#define PUSH(v) push(&terp->stack, v)
-#define POP() pop(&terp->stack)
-#define PEEK() peek(&terp->stack)
-#define PEEKN(n) peekn(&terp->stack, n)
+#define PUSH(v) push(&vm->stack, v)
+#define POP() pop(&vm->stack)
+#define PEEK() peek(&vm->stack)
+#define PEEKN(n) peekn(&vm->stack, n)
 
-void push_call(struct interpreter *terp, struct array *code);
-void pop_call(struct interpreter *terp);
+void push_call(struct vm *vm, struct array *code);
+void pop_call(struct vm *vm);
 
 value_t mk_string(const char *b, const char *e);
-void add_primitive(struct interpreter *terp, const char *name, prim_fn fn);
+void add_primitive(struct vm *vm, const char *name, prim_fn fn);
 
 enum object_type {
 	STRING,
@@ -102,7 +102,7 @@ struct array {
 	value_t elts[MAX_ARRAY_SIZE]; /* yee haa! */
 };
 
-void eval(struct interpreter *terp, struct array *code);
+void eval(struct vm *vm, struct array *code);
 void *as_ref(value_t v);
 value_t mk_quot();
 value_t mk_array();

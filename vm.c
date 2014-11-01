@@ -522,16 +522,16 @@ struct dynamic_scope {
 	struct list_head definitions;
 };
 
-static void init_interpreter(struct interpreter *terp)
+static void init_vm(struct vm *vm)
 {
-	memset(terp, 0, sizeof(*terp));
-	INIT_LIST_HEAD(&terp->prims);
-	INIT_LIST_HEAD(&terp->definitions);
-	init_stack(&terp->stack);
-	INIT_LIST_HEAD(&terp->call_stack);
+	memset(vm, 0, sizeof(*vm));
+	INIT_LIST_HEAD(&vm->prims);
+	INIT_LIST_HEAD(&vm->definitions);
+	init_stack(&vm->stack);
+	INIT_LIST_HEAD(&vm->call_stack);
 }
 
-void add_primitive(struct interpreter *terp, const char *name, prim_fn fn)
+void add_primitive(struct vm *vm, const char *name, prim_fn fn)
 {
 	// FIXME: should this be managed by the mm?
 	struct primitive *p = malloc(sizeof(*p));
@@ -540,7 +540,7 @@ void add_primitive(struct interpreter *terp, const char *name, prim_fn fn)
 	p->name = strdup(name);
 	p->fn = fn;
 
-	list_add(&p->list, &terp->prims);
+	list_add(&p->list, &vm->prims);
 }
 
 static int cmp_str_tok(const char *str, const char *b, const char *e)
@@ -566,60 +566,60 @@ static int cmp_str_tok(const char *str, const char *b, const char *e)
 		return 1;
 }
 
-static struct primitive *find_primitive(struct interpreter *terp, const char *b, const char *e)
+static struct primitive *find_primitive(struct vm *vm, const char *b, const char *e)
 {
 	struct primitive *p;
 
-	list_for_each_entry (p, &terp->prims, list)
+	list_for_each_entry (p, &vm->prims, list)
 		if (!cmp_str_tok(p->name, b, e))
 			return p;
 
 	return NULL;
 }
 
-static void add_word_def(struct interpreter *terp, struct word *w, struct array *body)
+static void add_word_def(struct vm *vm, struct word *w, struct array *body)
 {
 	struct def *d = zalloc(DEF, sizeof(*d));
-	list_add(&d->list, &terp->definitions);
+	list_add(&d->list, &vm->definitions);
 	d->w = w;
 	d->body = body;
 }
 
-static struct array *find_word_def(struct interpreter *terp, struct word *w)
+static struct array *find_word_def(struct vm *vm, struct word *w)
 {
 	struct def *d;
 
-	list_for_each_entry (d, &terp->definitions, list)
+	list_for_each_entry (d, &vm->definitions, list)
 		if (word_eq(w, d->w))
 			return d->body;
 
 	return NULL;
 }
 
-void push_call(struct interpreter *terp, struct array *code)
+void push_call(struct vm *vm, struct array *code)
 {
 	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
 	pc->code = code;
 	pc->position = 0;
-	list_add(&pc->list, &terp->call_stack);
+	list_add(&pc->list, &vm->call_stack);
 }
 
-void pop_call(struct interpreter *terp)
+void pop_call(struct vm *vm)
 {
-	struct code_position *pc = list_first_entry(&terp->call_stack, struct code_position, list);
+	struct code_position *pc = list_first_entry(&vm->call_stack, struct code_position, list);
 	list_del(&pc->list);
 }
 
-static void inc_pc(struct interpreter *terp)
+static void inc_pc(struct vm *vm)
 {
-	if (!list_empty(&terp->call_stack)) {
-		struct code_position *pc = list_first_entry(&terp->call_stack, struct code_position, list);
+	if (!list_empty(&vm->call_stack)) {
+		struct code_position *pc = list_first_entry(&vm->call_stack, struct code_position, list);
 		if (++pc->position == pc->code->nr_elts)
-			pop_call(terp);
+			pop_call(vm);
 	}
 }
 
-static void eval_value(struct interpreter *terp, value_t v)
+static void eval_value(struct vm *vm, value_t v)
 {
 	const char *b;
 	struct primitive *p;
@@ -649,15 +649,15 @@ static void eval_value(struct interpreter *terp, value_t v)
 
 		case WORD:
 			w = (struct word *) as_ref(v);
-			p = find_primitive(terp, w->b, w->e);
+			p = find_primitive(vm, w->b, w->e);
 			if (p) {
-				p->fn(terp);
+				p->fn(vm);
 				break;
 			}
 
-			body = find_word_def(terp, w);
+			body = find_word_def(vm, w);
 			if (body) {
-				push_call(terp, body);
+				push_call(vm, body);
 				break;
 			}
 
@@ -683,18 +683,18 @@ static void eval_value(struct interpreter *terp, value_t v)
 	}
 }
 
-void eval(struct interpreter *terp, struct array *code)
+void eval(struct vm *vm, struct array *code)
 {
 	value_t v;
 	struct code_position *pc;
 
 	if (code->nr_elts) {
-		push_call(terp, code);
-		while (!list_empty(&terp->call_stack)) {
-			pc = list_first_entry(&terp->call_stack, struct code_position, list);
+		push_call(vm, code);
+		while (!list_empty(&vm->call_stack)) {
+			pc = list_first_entry(&vm->call_stack, struct code_position, list);
 			v = pc->code->elts[pc->position];
-			inc_pc(terp);
-			eval_value(terp, v);
+			inc_pc(vm);
+			eval_value(vm, v);
 		}
 	}
 }
@@ -707,50 +707,50 @@ struct string_source {
 	struct token tok;
 };
 
-static bool string_next_value(struct interpreter *terp, struct string_source *in, value_t *r);
+static bool string_next_value(struct vm *vm, struct string_source *in, value_t *r);
 
-static bool syntax_quot(struct interpreter *terp, struct string_source *ss, value_t *r)
+static bool syntax_quot(struct vm *vm, struct string_source *ss, value_t *r)
 {
 	value_t r2;
 
 	*r = mk_quot();
-	while (string_next_value(terp, ss, &r2) &&
+	while (string_next_value(vm, ss, &r2) &&
 	       cmp_str_tok("]", ss->tok.begin, ss->tok.end))
 		append_array(*r, r2);
 
 	return true;
 }
 
-static bool syntax_array(struct interpreter *terp, struct string_source *ss, value_t *r)
+static bool syntax_array(struct vm *vm, struct string_source *ss, value_t *r)
 {
 	value_t r2;
 
 	*r = mk_array();
-	while (string_next_value(terp, ss, &r2) &&
+	while (string_next_value(vm, ss, &r2) &&
 	       cmp_str_tok("}", ss->tok.begin, ss->tok.end))
 		append_array(*r, r2);
 
 	return true;
 }
 
-static void syntax_definition(struct interpreter *terp, struct string_source *ss)
+static void syntax_definition(struct vm *vm, struct string_source *ss)
 {
 	value_t w, body, v;
 
-	if (!string_next_value(terp, ss, &w)) {
+	if (!string_next_value(vm, ss, &w)) {
 		fprintf(stderr, "bad definition");
 		exit(1);
 	}
 
 	body = mk_quot();
-	while (string_next_value(terp, ss, &v) &&
+	while (string_next_value(vm, ss, &v) &&
 	       cmp_str_tok(";", ss->tok.begin, ss->tok.end))
 		append_array(body, v);
 
-	add_word_def(terp, as_ref(w), as_ref(body));
+	add_word_def(vm, as_ref(w), as_ref(body));
 }
 
-static bool string_next_value(struct interpreter *terp, struct string_source *ss, value_t *r)
+static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *r)
 {
 	if (!scan(&ss->in, &ss->tok))
 		return false;
@@ -772,14 +772,14 @@ static bool string_next_value(struct interpreter *terp, struct string_source *ss
 			*r = mk_false();
 
 		else if (!cmp_str_tok("{", ss->tok.begin, ss->tok.end))
-			return syntax_array(terp, ss, r);
+			return syntax_array(vm, ss, r);
 
 		else if (!cmp_str_tok("[", ss->tok.begin, ss->tok.end))
-			return syntax_quot(terp, ss, r);
+			return syntax_quot(vm, ss, r);
 
 		else if (!cmp_str_tok(":", ss->tok.begin, ss->tok.end)) {
-			syntax_definition(terp, ss);
-			return string_next_value(terp, ss, r);
+			syntax_definition(vm, ss);
+			return string_next_value(vm, ss, r);
 
 		} else
 			*r = mk_word(ss->tok.begin, ss->tok.end);
@@ -793,7 +793,7 @@ static bool string_next_value(struct interpreter *terp, struct string_source *ss
 	return true;
 }
 
-static struct array *_read(struct interpreter *terp, const char *b, const char *e)
+static struct array *_read(struct vm *vm, const char *b, const char *e)
 {
 	value_t v;
 	struct string_source in;
@@ -802,13 +802,13 @@ static struct array *_read(struct interpreter *terp, const char *b, const char *
 	in.in.begin = b;
 	in.in.end = e;
 
-	while (string_next_value(terp, &in, &v))
+	while (string_next_value(vm, &in, &v))
 		append_array(a, v);
 
 	return as_ref(a);
 }
 
-static void load_file(struct interpreter *terp, const char *path)
+static void load_file(struct vm *vm, const char *path)
 {
 	int fd;
 	struct stat info;
@@ -833,8 +833,8 @@ static void load_file(struct interpreter *terp, const char *path)
 	}
 	e = b + info.st_size;
 
-	code = _read(terp, b, e);
-	eval(terp, code);
+	code = _read(vm, b, e);
+	eval(vm, code);
 	munmap(b, info.st_size);
 	close(fd);
 }
@@ -853,7 +853,7 @@ static void print_stack(struct stack *s)
 	}
 }
 
-static int repl(struct interpreter *terp)
+static int repl(struct vm *vm)
 {
 	char buffer[4096];
 
@@ -864,8 +864,8 @@ static int repl(struct interpreter *terp)
 		if (!fgets(buffer, sizeof(buffer), stdin))
 			break;
 
-		eval(terp, _read(terp, buffer, buffer + strlen(buffer)));
-		print_stack(&terp->stack);
+		eval(vm, _read(vm, buffer, buffer + strlen(buffer)));
+		print_stack(&vm->stack);
 	}
 
 	return 0;
@@ -873,15 +873,15 @@ static int repl(struct interpreter *terp)
 
 int main(int argc, char **argv)
 {
-	struct interpreter terp;
+	struct vm vm;
 
-	init_interpreter(&terp);
-	add_basic_primitives(&terp);
-	add_dm_primitives(&terp);
+	init_vm(&vm);
+	add_basic_primitives(&vm);
+	add_dm_primitives(&vm);
 
-	load_file(&terp, "prelude.dm");
+	load_file(&vm, "prelude.dm");
 
-	repl(&terp);
+	repl(&vm);
 	printf("\n\ntotal allocated: %llu\n",
 	       (unsigned long long) memory_stats_.total_allocated);
 
