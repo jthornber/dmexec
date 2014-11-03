@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "vm.h"
 
@@ -15,14 +16,26 @@ static void clear(struct vm *vm)
 
 static void call(struct vm *vm)
 {
-	value_t maybe_q = POP();
+	value_t callable = POP();
+	struct continuation *k;
 
-	if (get_type(maybe_q) != QUOT) {
-		fprintf(stderr, "not a quotation\n");
+	switch (get_type(callable)) {
+	case QUOT:
+		push_call(vm, as_ref(callable));
+		break;
+
+	case CONTINUATION:
+		k = as_ref(callable);
+		memcpy(&vm->stack, &k->stack, sizeof(vm->stack));
+
+		/* FIXME: the list elements can have mutated, so they'll have to be copied
+		 * properly */
+		memcpy(&vm->call_stack, &k->call_stack, sizeof(vm->call_stack));
+
+	default:
+		fprintf(stderr, "not a callable\n");
 		exit(1);
 	}
-
-	push_call(vm, as_ref(maybe_q));
 }
 
 static void curry(struct vm *vm)

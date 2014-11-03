@@ -341,20 +341,41 @@ void print_value(FILE *stream, value_t v)
 			print_string(stream, (struct string *) v.ptr);
 			break;
 
-		case ARRAY:
-			print_array(stream, (struct array *) v.ptr);
+		case BYTE_ARRAY:
+			fprintf(stream, "~byte array~");
 			break;
 
-		case QUOT:
-			print_quot(stream, (struct array *) v.ptr);
+		case TUPLE:
+			fprintf(stream, "~tuple~");
 			break;
 
 		case WORD:
 			print_word(stream, (struct word *) v.ptr);
 			break;
 
-		default:
-			fprintf(stderr, "not implemented\n");
+		case QUOT:
+			print_quot(stream, (struct array *) v.ptr);
+			break;
+
+		case ARRAY:
+			print_array(stream, (struct array *) v.ptr);
+			break;
+
+		case DEF:
+			fprintf(stream, "~def~");
+			break;
+
+		case CODE_POSITION:
+			fprintf(stream, "~code position~");
+			break;
+
+		case CONTINUATION:
+			fprintf(stream, "~continuation~");
+			break;
+
+		case FIXNUM:
+			fprintf(stream, "~boxed fixnum?!~");
+			break;
 		}
 		break;
 
@@ -644,6 +665,7 @@ static void eval_value(struct vm *vm, value_t v)
 		case BYTE_ARRAY:
 		case TUPLE:
 		case QUOT:
+		case CONTINUATION:
 			PUSH(v);
 			break;
 

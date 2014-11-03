@@ -58,10 +58,16 @@ struct token {
 	int fixnum;
 };
 
+struct continuation {
+	struct stack stack;
+	struct list_head call_stack;
+};
+
 struct vm {
 	struct list_head prims;
 	struct list_head definitions;
 
+	// exactly the same fields as in a vm_continuation
 	struct stack stack;
 	struct list_head call_stack;
 };
@@ -88,6 +94,7 @@ enum object_type {
 	ARRAY,
 	DEF,
 	CODE_POSITION,
+	CONTINUATION,
 	FIXNUM			/* these are always tagged immediate values */
 };
 
