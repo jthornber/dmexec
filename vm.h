@@ -67,17 +67,15 @@ struct vm {
 	struct list_head prims;
 	struct list_head definitions;
 
-	// exactly the same fields as in a vm_continuation
-	struct stack stack;
-	struct list_head call_stack;
+	struct continuation *k;
 };
 
 typedef void (*prim_fn)(struct vm *);
 
-#define PUSH(v) push(&vm->stack, v)
-#define POP() pop(&vm->stack)
-#define PEEK() peek(&vm->stack)
-#define PEEKN(n) peekn(&vm->stack, n)
+#define PUSH(v) push(&vm->k->stack, v)
+#define POP() pop(&vm->k->stack)
+#define PEEK() peek(&vm->k->stack)
+#define PEEKN(n) peekn(&vm->k->stack, n)
 
 void push_call(struct vm *vm, struct array *code);
 void pop_call(struct vm *vm);

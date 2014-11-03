@@ -543,13 +543,19 @@ struct dynamic_scope {
 	struct list_head definitions;
 };
 
+static void init_continuation(struct continuation *k)
+{
+	init_stack(&k->stack);
+	INIT_LIST_HEAD(&k->call_stack);
+}
+
 static void init_vm(struct vm *vm)
 {
 	memset(vm, 0, sizeof(*vm));
 	INIT_LIST_HEAD(&vm->prims);
 	INIT_LIST_HEAD(&vm->definitions);
-	init_stack(&vm->stack);
-	INIT_LIST_HEAD(&vm->call_stack);
+	vm->k = zalloc(CONTINUATION, sizeof(*vm->k));
+	init_continuation(vm->k);
 }
 
 void add_primitive(struct vm *vm, const char *name, prim_fn fn)
@@ -622,19 +628,19 @@ void push_call(struct vm *vm, struct array *code)
 	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
 	pc->code = code;
 	pc->position = 0;
-	list_add(&pc->list, &vm->call_stack);
+	list_add(&pc->list, &vm->k->call_stack);
 }
 
 void pop_call(struct vm *vm)
 {
-	struct code_position *pc = list_first_entry(&vm->call_stack, struct code_position, list);
+	struct code_position *pc = list_first_entry(&vm->k->call_stack, struct code_position, list);
 	list_del(&pc->list);
 }
 
 static void inc_pc(struct vm *vm)
 {
-	if (!list_empty(&vm->call_stack)) {
-		struct code_position *pc = list_first_entry(&vm->call_stack, struct code_position, list);
+	if (!list_empty(&vm->k->call_stack)) {
+		struct code_position *pc = list_first_entry(&vm->k->call_stack, struct code_position, list);
 		if (++pc->position == pc->code->nr_elts)
 			pop_call(vm);
 	}
@@ -712,8 +718,8 @@ void eval(struct vm *vm, struct array *code)
 
 	if (code->nr_elts) {
 		push_call(vm, code);
-		while (!list_empty(&vm->call_stack)) {
-			pc = list_first_entry(&vm->call_stack, struct code_position, list);
+		while (!list_empty(&vm->k->call_stack)) {
+			pc = list_first_entry(&vm->k->call_stack, struct code_position, list);
 			v = pc->code->elts[pc->position];
 			inc_pc(vm);
 			eval_value(vm, v);
@@ -887,7 +893,7 @@ static int repl(struct vm *vm)
 			break;
 
 		eval(vm, _read(vm, buffer, buffer + strlen(buffer)));
-		print_stack(&vm->stack);
+		print_stack(&vm->k->stack);
 	}
 
 	return 0;

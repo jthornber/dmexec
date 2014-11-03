@@ -11,7 +11,7 @@
  *--------------------------------------------------------------*/
 static void clear(struct vm *vm)
 {
-	vm->stack.nr_entries = 0;
+	vm->k->stack.nr_entries = 0;
 }
 
 static void call(struct vm *vm)
@@ -26,11 +26,11 @@ static void call(struct vm *vm)
 
 	case CONTINUATION:
 		k = as_ref(callable);
-		memcpy(&vm->stack, &k->stack, sizeof(vm->stack));
+		memcpy(&vm->k->stack, &k->stack, sizeof(vm->k->stack));
 
 		/* FIXME: the list elements can have mutated, so they'll have to be copied
 		 * properly */
-		memcpy(&vm->call_stack, &k->call_stack, sizeof(vm->call_stack));
+		memcpy(&vm->k->call_stack, &k->call_stack, sizeof(vm->k->call_stack));
 
 	default:
 		fprintf(stderr, "not a callable\n");
