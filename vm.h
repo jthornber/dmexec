@@ -97,6 +97,8 @@ enum object_type {
 };
 
 enum object_type get_type(value_t v);
+void *alloc(enum object_type type, size_t s);
+value_t mk_ref(void *ptr);
 
 #define MAX_ARRAY_SIZE 32
 

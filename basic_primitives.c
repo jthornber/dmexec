@@ -17,25 +17,51 @@ static void clear(struct vm *vm)
 static void call(struct vm *vm)
 {
 	value_t callable = POP();
-	struct continuation *k;
 
 	switch (get_type(callable)) {
 	case QUOT:
 		push_call(vm, as_ref(callable));
 		break;
 
-	case CONTINUATION:
-		k = as_ref(callable);
-		memcpy(&vm->k->stack, &k->stack, sizeof(vm->k->stack));
-
-		/* FIXME: the list elements can have mutated, so they'll have to be copied
-		 * properly */
-		memcpy(&vm->k->call_stack, &k->call_stack, sizeof(vm->k->call_stack));
-
 	default:
-		fprintf(stderr, "not a callable\n");
+		fprintf(stderr, "not a callable: ");
+		print_value(stderr, callable);
+		fprintf(stderr, "\n");
 		exit(1);
 	}
+}
+
+static void callcc0(struct vm *vm)
+{
+	value_t quot = POP();
+	struct code_position *cp, *new_cp;
+	struct continuation *k = alloc(CONTINUATION, sizeof(*k));
+
+	memcpy(&k->stack, &vm->k->stack, sizeof(k->stack));
+	INIT_LIST_HEAD(&k->call_stack);
+
+	list_for_each_entry (cp, &vm->k->call_stack, list) {
+		new_cp = alloc(CODE_POSITION, sizeof(*cp));
+		new_cp->code = cp->code;
+		new_cp->position = cp->position;
+		list_add_tail(&new_cp->list, &k->call_stack);
+	}
+
+	PUSH(mk_ref(k));
+	PUSH(quot);
+	call(vm);
+}
+
+static void continue_cc(struct vm *vm)
+{
+	value_t k = POP();
+
+	if (get_type(k) != CONTINUATION) {
+		fprintf(stderr, "not a continuation\n");
+		exit(1);
+	}
+
+	vm->k = as_ref(k);
 }
 
 static void curry(struct vm *vm)
@@ -132,13 +158,24 @@ static void swap(struct vm *vm)
 
 static void dip(struct vm *vm)
 {
+#if 0
 	value_t q = POP();
 	value_t x = POP();
+
 	value_t after = mk_quot();
 	append_array(after, x);
 	push_call(vm, as_ref(after));
+
 	PUSH(q);
 	call(vm);
+#else
+	value_t q = POP();
+	value_t x = POP();
+
+	PUSH(q);
+	call(vm);
+	PUSH(x);
+#endif
 }
 
 static void fixnum_add(struct vm *vm)
@@ -235,6 +272,9 @@ void add_basic_primitives(struct vm *vm)
 	add_primitive(vm, "?", choice);
 
 	add_primitive(vm, "each", each);
+
+	add_primitive(vm, "callcc0", callcc0);
+	add_primitive(vm, "continue", continue_cc);
 }
 
 /*----------------------------------------------------------------*/

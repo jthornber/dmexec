@@ -45,7 +45,7 @@ unsigned as_fixnum(value_t v)
 	return v.i >> 2;
 }
 
-static value_t mk_ref(void *ptr)
+value_t mk_ref(void *ptr)
 {
 	value_t v;
 	v.ptr = ptr;
@@ -99,7 +99,7 @@ static void out_of_memory()
 	exit(1);
 }
 
-static void *alloc(enum object_type type, size_t s)
+void *alloc(enum object_type type, size_t s)
 {
 	size_t len = s + sizeof(struct header);
 	struct header *h = malloc(len);
