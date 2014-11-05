@@ -15,7 +15,7 @@
 
 //----------------------------------------------------------------
 // Math utils
-//----------------------------------------------------------------
+
 unsigned round_up(unsigned n, unsigned pow)
 {
 	return (n + (pow - 1)) & -pow;
@@ -25,7 +25,6 @@ unsigned round_up(unsigned n, unsigned pow)
 // Values - immediate or reference
 //
 // The bottom 2 bits are used for tagging.
-//----------------------------------------------------------------
 
 static enum tag get_tag(value_t v)
 {
@@ -72,7 +71,7 @@ bool is_false(value_t v)
 
 //----------------------------------------------------------------
 // Objects
-//----------------------------------------------------------------
+
 #define HEADER_MAGIC 846219U
 
 struct header {
@@ -83,7 +82,7 @@ struct header {
 
 //----------------------------------------------------------------
 // Memory manager
-//----------------------------------------------------------------
+
 static struct {
 	size_t total_allocated;
 	size_t total_collected;
@@ -142,7 +141,7 @@ enum object_type get_type(value_t v)
 
 //----------------------------------------------------------------
 // Words
-//----------------------------------------------------------------
+
 struct word {
 	char *b, *e;
 };
@@ -187,7 +186,7 @@ static bool word_eq(struct word *lhs, struct word *rhs)
 
 //----------------------------------------------------------------
 // Byte array
-//----------------------------------------------------------------
+
 struct byte_array {
 	unsigned allocated;
 	unsigned len;
@@ -225,7 +224,7 @@ void push_byte(struct byte_array *ba, unsigned b)
 
 //----------------------------------------------------------------
 // String handling
-//----------------------------------------------------------------
+
 struct string {
 	char *begin;
 	char *end;
@@ -267,7 +266,7 @@ value_t mk_string(const char *b, const char *e)
 
 //----------------------------------------------------------------
 // Arrays
-//----------------------------------------------------------------
+
 value_t mk_array()
 {
 	struct array *a = alloc(ARRAY, sizeof(*a));
@@ -294,7 +293,7 @@ void append_array(value_t av, value_t v)
 
 //----------------------------------------------------------------
 // Printing values
-//----------------------------------------------------------------
+
 static void print_string(FILE *stream, struct string *str)
 {
 	const char *ptr;
@@ -396,9 +395,9 @@ void print_value(FILE *stream, value_t v)
 	}
 }
 
-/*----------------------------------------------------------------
- * Stack engine
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Stack engine
+
 void init_stack(struct stack *s)
 {
 	s->nr_entries = 0;
@@ -430,9 +429,9 @@ value_t pop(struct stack *s)
 	return s->values[s->nr_entries];
 }
 
-/*----------------------------------------------------------------
- * Lexer
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Lexer
+
 struct input {
 	const char *begin;
 	const char *end;
@@ -534,9 +533,9 @@ static bool scan(struct input *in, struct token *result)
 		return scan_word(in, result);
 }
 
-/*----------------------------------------------------------------
- * Interpreter
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Interpreter
+
 struct primitive {
 	struct list_head list;
 	char *name;
@@ -742,9 +741,9 @@ void eval(struct vm *vm, struct array *code)
 	}
 }
 
-/*----------------------------------------------------------------
- * String source
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// String source
+
 struct string_source {
 	struct input in;
 	struct token tok;
@@ -885,9 +884,9 @@ static void load_file(struct vm *vm, const char *path)
 	close(fd);
 }
 
-/*----------------------------------------------------------------
- * Top level
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Top level
+
 static void print_stack(struct stack *s)
 {
 	unsigned i;
