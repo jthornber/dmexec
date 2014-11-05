@@ -898,6 +898,7 @@ static void print_stack(struct stack *s)
 	}
 }
 
+// FIXME: this should be written in dm code
 static int repl(struct vm *vm)
 {
 	char buffer[4096];
