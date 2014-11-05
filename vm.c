@@ -13,19 +13,19 @@
 #include "vm.h"
 #include "primitives.h"
 
-/*----------------------------------------------------------------
- * Math utils
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Math utils
+//----------------------------------------------------------------
 unsigned round_up(unsigned n, unsigned pow)
 {
 	return (n + (pow - 1)) & -pow;
 }
 
-/*----------------------------------------------------------------
- * Values - immediate or reference
- *
- * The bottom 2 bits are used for tagging.
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Values - immediate or reference
+//
+// The bottom 2 bits are used for tagging.
+//----------------------------------------------------------------
 
 static enum tag get_tag(value_t v)
 {
@@ -70,9 +70,9 @@ bool is_false(value_t v)
 	return v.i == TAG_FALSE;
 }
 
-/*----------------------------------------------------------------
- * Objects
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Objects
+//----------------------------------------------------------------
 #define HEADER_MAGIC 846219U
 
 struct header {
@@ -81,9 +81,9 @@ struct header {
 	unsigned magic;
 };
 
-/*----------------------------------------------------------------
- * Memory manager
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Memory manager
+//----------------------------------------------------------------
 static struct {
 	size_t total_allocated;
 	size_t total_collected;
@@ -140,17 +140,17 @@ enum object_type get_type(value_t v)
 	return h->type;
 }
 
-/*----------------------------------------------------------------
- * Words
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Words
+//----------------------------------------------------------------
 struct word {
 	char *b, *e;
 };
 
-value_t mk_word(const char *begin, const char *end)
+value_t mk_word_like(enum object_type type, const char *begin, const char *end)
 {
 	char *ptr;
-	struct word *w = alloc(WORD, sizeof(*w) + round_up(end - begin, 4));
+	struct word *w = alloc(type, sizeof(*w) + round_up(end - begin, 4));
 
 	w->b = (char *)(w + 1);
 	for (ptr = w->b; begin != end; ptr++, begin++)
@@ -158,6 +158,16 @@ value_t mk_word(const char *begin, const char *end)
 	w->e = ptr;
 
 	return mk_ref(w);
+}
+
+value_t mk_symbol(const char *begin, const char *end)
+{
+	return mk_word_like(SYMBOL, begin, end);
+}
+
+value_t mk_word(const char *begin, const char *end)
+{
+	return mk_word_like(WORD, begin, end);
 }
 
 static bool word_eq(struct word *lhs, struct word *rhs)
@@ -175,9 +185,9 @@ static bool word_eq(struct word *lhs, struct word *rhs)
 	return p1 == lhs->e && p2 == rhs->e;
 }
 
-/*----------------------------------------------------------------
- * Byte array
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Byte array
+//----------------------------------------------------------------
 struct byte_array {
 	unsigned allocated;
 	unsigned len;
@@ -213,9 +223,9 @@ void push_byte(struct byte_array *ba, unsigned b)
 	ba->bytes[ba->len++] = b;
 }
 
-/*----------------------------------------------------------------
- * String handling
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// String handling
+//----------------------------------------------------------------
 struct string {
 	char *begin;
 	char *end;
@@ -255,9 +265,9 @@ value_t mk_string(const char *b, const char *e)
 	return mk_ref(s);
 }
 
-/*----------------------------------------------------------------
- * Arrays
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Arrays
+//----------------------------------------------------------------
 value_t mk_array()
 {
 	struct array *a = alloc(ARRAY, sizeof(*a));
@@ -282,9 +292,9 @@ void append_array(value_t av, value_t v)
 	a->elts[a->nr_elts++] = v;
 }
 
-/*----------------------------------------------------------------
- * Printing values
- *--------------------------------------------------------------*/
+//----------------------------------------------------------------
+// Printing values
+//----------------------------------------------------------------
 static void print_string(FILE *stream, struct string *str)
 {
 	const char *ptr;
@@ -349,6 +359,7 @@ void print_value(FILE *stream, value_t v)
 			fprintf(stream, "~tuple~");
 			break;
 
+		case SYMBOL:
 		case WORD:
 			print_word(stream, (struct word *) v.ptr);
 			break;
@@ -675,6 +686,10 @@ static void eval_value(struct vm *vm, value_t v)
 			PUSH(v);
 			break;
 
+		case SYMBOL:
+			PUSH(v);
+			break;
+
 		case WORD:
 			w = (struct word *) as_ref(v);
 			p = find_primitive(vm, w->b, w->e);
@@ -809,7 +824,10 @@ static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *
 			syntax_definition(vm, ss);
 			return string_next_value(vm, ss, r);
 
-		} else
+		} else if (*ss->tok.begin == ':')
+			*r = mk_symbol(ss->tok.begin, ss->tok.end);
+
+		else
 			*r = mk_word(ss->tok.begin, ss->tok.end);
 		break;
 

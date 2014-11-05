@@ -87,6 +87,7 @@ enum object_type {
 	STRING,
 	BYTE_ARRAY,
 	TUPLE,
+	SYMBOL,
 	WORD,
 	QUOT,
 	ARRAY,
