@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "vm.h"
+#include "string_type.h"
 #include "primitives.h"
 
 //----------------------------------------------------------------
@@ -83,6 +84,8 @@ struct header {
 //----------------------------------------------------------------
 // Memory manager
 
+// FIXME: use the valgrind api to allow it to check for accesses to garbage
+
 static struct {
 	size_t total_allocated;
 	size_t total_collected;
@@ -121,9 +124,14 @@ static void *zalloc(enum object_type type, size_t s)
 	return ptr;
 }
 
+static struct header *obj_to_header(void *obj)
+{
+	return ((struct header *) obj) - 1;
+}
+
 static struct header *get_header(value_t v)
 {
-	struct header *h = (struct header *) v.ptr - 1;
+	struct header *h = obj_to_header(v.ptr);
 	assert(h->magic == HEADER_MAGIC);
 	return h;
 };
@@ -139,49 +147,29 @@ enum object_type get_type(value_t v)
 	return h->type;
 }
 
+static void set_type(void *obj, enum object_type t)
+{
+	struct header *h = obj_to_header(obj);
+	h->type = t;
+}
+
 //----------------------------------------------------------------
 // Words
-
-struct word {
-	char *b, *e;
-};
-
-value_t mk_word_like(enum object_type type, const char *begin, const char *end)
+value_t mk_word_like(enum object_type type, struct string *str)
 {
-	char *ptr;
-	struct word *w = alloc(type, sizeof(*w) + round_up(end - begin, 4));
-
-	w->b = (char *)(w + 1);
-	for (ptr = w->b; begin != end; ptr++, begin++)
-		*ptr = *begin;
-	w->e = ptr;
-
+	struct string *w = string_clone(str);
+	set_type(w, WORD);
 	return mk_ref(w);
 }
 
-value_t mk_symbol(const char *begin, const char *end)
+value_t mk_symbol(struct string *str)
 {
-	return mk_word_like(SYMBOL, begin, end);
+	return mk_word_like(SYMBOL, str);
 }
 
-value_t mk_word(const char *begin, const char *end)
+value_t mk_word(struct string *str)
 {
-	return mk_word_like(WORD, begin, end);
-}
-
-static bool word_eq(struct word *lhs, struct word *rhs)
-{
-	const char *p1 = lhs->b;
-	const char *p2 = rhs->b;
-
-	while (p1 != lhs->e && p2 != rhs->e) {
-		if (*p1 != *p2)
-			return false;
-
-		p1++, p2++;
-	}
-
-	return p1 == lhs->e && p2 == rhs->e;
+	return mk_word_like(WORD, str);
 }
 
 //----------------------------------------------------------------
@@ -223,48 +211,6 @@ void push_byte(struct byte_array *ba, unsigned b)
 }
 
 //----------------------------------------------------------------
-// String handling
-
-struct string {
-	char *begin;
-	char *end;
-	char *alloc_end;
-};
-
-static struct string *alloc_string(unsigned space)
-{
-	struct string *s;
-	char *b;
-
-	space = round_up(space, 4);
-	s = alloc(STRING, sizeof(struct string) + space);
-	b = (char *) (s + 1);
-
-	s->begin = s->end = b;
-	s->alloc_end = b + space;
-
-	return s;
-}
-
-static struct string *clone_string(struct string *orig)
-{
-	struct string *new = alloc_string(orig->alloc_end - orig->begin);
-	memcpy(new->begin, orig->begin, orig->end - orig->begin);
-	return new;
-}
-
-value_t mk_string(const char *b, const char *e)
-{
-	unsigned len = e - b;
-	struct string *s = alloc_string(len);
-
-	memcpy(s->begin, b, len);
-	s->end = s->begin + len;
-
-	return mk_ref(s);
-}
-
-//----------------------------------------------------------------
 // Arrays
 
 value_t mk_array()
@@ -299,7 +245,7 @@ static void print_string(FILE *stream, struct string *str)
 	const char *ptr;
 
 	fputc('\"', stream);
-	for (ptr = str->begin; ptr != str->end; ptr++)
+	for (ptr = str->b; ptr != str->e; ptr++)
 		fputc(*ptr, stream);
 	fputc('\"', stream);
 }
@@ -326,7 +272,15 @@ static void print_quot(FILE *stream, struct array *a)
 	print_array_like(stream, a, '[', ']');
 }
 
-static void print_word(FILE *stream, struct word *w)
+#if 0
+static void print_tuple(FILE *stream, struct tuple *t)
+{
+	// FIXME: print out the class
+	print_array_like(stream, t, '|', '|');
+}
+#endif
+
+static void print_word(FILE *stream, struct string *w)
 {
 	const char *ptr;
 
@@ -355,12 +309,12 @@ void print_value(FILE *stream, value_t v)
 			break;
 
 		case TUPLE:
-			fprintf(stream, "~tuple~");
+			//		print_tuple(stream, v.ptr);
 			break;
 
 		case SYMBOL:
 		case WORD:
-			print_word(stream, (struct word *) v.ptr);
+			print_word(stream, v.ptr);
 			break;
 
 		case QUOT:
@@ -432,43 +386,38 @@ value_t pop(struct stack *s)
 //----------------------------------------------------------------
 // Lexer
 
-struct input {
-	const char *begin;
-	const char *end;
-};
-
-static bool more_input(struct input *in)
+static bool more_input(struct string *in)
 {
-	return in->begin != in->end;
+	return in->b != in->e;
 }
 
-static void step_input(struct input *in)
+static void step_input(struct string *in)
 {
-	in->begin++;
+	in->b++;
 }
 
-static void consume_space(struct input *in)
+static void consume_space(struct string *in)
 {
-	while (more_input(in) && isspace(*in->begin))
+	while (more_input(in) && isspace(*in->b))
 		step_input(in);
 }
 
-static bool scan_fixnum(struct input *in, struct token *result)
+static bool scan_fixnum(struct string *in, struct token *result)
 {
 	int n = 0;
 
-	result->begin = in->begin;
-	while (more_input(in) && isdigit(*in->begin)) {
+	result->str.b = in->b;
+	while (more_input(in) && isdigit(*in->b)) {
 		n *= 10;
-		n += *in->begin - '0'; /* FIXME: assumes ascii */
+		n += *in->b - '0'; /* FIXME: assumes ascii */
 		step_input(in);
 	}
 
-	if (more_input(in) && !isspace(*in->begin)) {
-		while (more_input(in) && !isspace(*in->begin))
+	if (more_input(in) && !isspace(*in->b)) {
+		while (more_input(in) && !isspace(*in->b))
 			step_input(in);
 
-		result->end = in->begin;
+		result->str.e = in->b;
 		result->type = TOK_WORD;
 
 	} else {
@@ -479,17 +428,17 @@ static bool scan_fixnum(struct input *in, struct token *result)
 	return true;
 }
 
-static bool scan_string(struct input *in, struct token *result)
+static bool scan_string(struct string *in, struct token *result)
 {
 	result->type = TOK_STRING;
 	step_input(in);
-	result->begin = in->begin;
+	result->str.b = in->b;
 
 	// FIXME: support escapes
-	while (more_input(in) && *in->begin != '\"')
+	while (more_input(in) && *in->b != '\"')
 		step_input(in);
 
-	result->end = in->begin;
+	result->str.e = in->b;
 
 	if (!more_input(in)) {
 		fprintf(stderr, "bad string\n");
@@ -501,19 +450,19 @@ static bool scan_string(struct input *in, struct token *result)
 	return true;
 }
 
-static bool scan_word(struct input *in, struct token *result)
+static bool scan_word(struct string *in, struct token *result)
 {
 	result->type = TOK_WORD;
-	result->begin = in->begin;
+	result->str.b = in->b;
 
-	while (more_input(in) && !isspace(*in->begin))
+	while (more_input(in) && !isspace(*in->b))
 		step_input(in);
 
-	result->end = in->begin;
+	result->str.e = in->b;
 	return true;
 }
 
-static bool scan(struct input *in, struct token *result)
+static bool scan(struct string *in, struct token *result)
 {
 	if (!more_input(in))
 		return false;
@@ -523,10 +472,10 @@ static bool scan(struct input *in, struct token *result)
 	if (!more_input(in))
 		return false;
 
-	if (isdigit(*in->begin))
+	if (isdigit(*in->b))
 		return scan_fixnum(in, result);
 
-	else if (*in->begin == '\"')
+	else if (*in->b == '\"')
 		return scan_string(in, result);
 
 	else
@@ -544,7 +493,7 @@ struct primitive {
 
 struct def {
 	struct list_head list;
-	struct word *w;
+	struct string *w;
 	struct array *body;
 };
 
@@ -580,41 +529,18 @@ void add_primitive(struct vm *vm, const char *name, prim_fn fn)
 	list_add(&p->list, &vm->prims);
 }
 
-static int cmp_str_tok(const char *str, const char *b, const char *e)
-{
-	while (b != e && *str) {
-		if (*b < *str)
-			return -1;
-
-		else if (*b > *str)
-			return 1;
-
-		b++;
-		str++;
-	}
-
-	if (b == e && !*str)
-		return 0;
-
-	else if (b == e)
-		return -1;
-
-	else
-		return 1;
-}
-
-static struct primitive *find_primitive(struct vm *vm, const char *b, const char *e)
+static struct primitive *find_primitive(struct vm *vm, struct string *w)
 {
 	struct primitive *p;
 
 	list_for_each_entry (p, &vm->prims, list)
-		if (!cmp_str_tok(p->name, b, e))
+		if (!string_cmp_cstr(w, p->name))
 			return p;
 
 	return NULL;
 }
 
-static void add_word_def(struct vm *vm, struct word *w, struct array *body)
+static void add_word_def(struct vm *vm, struct string *w, struct array *body)
 {
 	struct def *d = zalloc(DEF, sizeof(*d));
 	list_add(&d->list, &vm->definitions);
@@ -622,12 +548,12 @@ static void add_word_def(struct vm *vm, struct word *w, struct array *body)
 	d->body = body;
 }
 
-static struct array *find_word_def(struct vm *vm, struct word *w)
+static struct array *find_word_def(struct vm *vm, struct string *w)
 {
 	struct def *d;
 
 	list_for_each_entry (d, &vm->definitions, list)
-		if (word_eq(w, d->w))
+		if (!string_cmp(w, d->w))
 			return d->body;
 
 	return NULL;
@@ -660,7 +586,7 @@ static void eval_value(struct vm *vm, value_t v)
 {
 	const char *b;
 	struct primitive *p;
-	struct word *w;
+	struct string *w;
 	struct array *body;
 	struct header *h;
 
@@ -690,8 +616,8 @@ static void eval_value(struct vm *vm, value_t v)
 			break;
 
 		case WORD:
-			w = (struct word *) as_ref(v);
-			p = find_primitive(vm, w->b, w->e);
+			w = as_ref(v);
+			p = find_primitive(vm, w);
 			if (p) {
 				p->fn(vm);
 				break;
@@ -745,7 +671,7 @@ void eval(struct vm *vm, struct array *code)
 // String source
 
 struct string_source {
-	struct input in;
+	struct string in;
 	struct token tok;
 };
 
@@ -757,7 +683,7 @@ static bool syntax_quot(struct vm *vm, struct string_source *ss, value_t *r)
 
 	*r = mk_quot();
 	while (string_next_value(vm, ss, &r2) &&
-	       cmp_str_tok("]", ss->tok.begin, ss->tok.end))
+	       string_cmp_cstr(&ss->tok.str, "]"))
 		append_array(*r, r2);
 
 	return true;
@@ -769,7 +695,7 @@ static bool syntax_array(struct vm *vm, struct string_source *ss, value_t *r)
 
 	*r = mk_array();
 	while (string_next_value(vm, ss, &r2) &&
-	       cmp_str_tok("}", ss->tok.begin, ss->tok.end))
+	       string_cmp_cstr(&ss->tok.str, "}"))
 		append_array(*r, r2);
 
 	return true;
@@ -786,7 +712,7 @@ static void syntax_definition(struct vm *vm, struct string_source *ss)
 
 	body = mk_quot();
 	while (string_next_value(vm, ss, &v) &&
-	       cmp_str_tok(";", ss->tok.begin, ss->tok.end))
+	       string_cmp_cstr(&ss->tok.str, ";"))
 		append_array(body, v);
 
 	add_word_def(vm, as_ref(w), as_ref(body));
@@ -803,31 +729,31 @@ static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *
 		break;
 
 	case TOK_STRING:
-		*r = mk_string(ss->tok.begin, ss->tok.end);
+		*r = mk_ref(string_clone(&ss->tok.str));
 		break;
 
 	case TOK_WORD:
 		/*
 		 * Syntax words should be evaluated immediately.
 		 */
-		if (!cmp_str_tok("f", ss->tok.begin, ss->tok.end))
+		if (!string_cmp_cstr(&ss->tok.str, "f"))
 			*r = mk_false();
 
-		else if (!cmp_str_tok("{", ss->tok.begin, ss->tok.end))
+		else if (!string_cmp_cstr(&ss->tok.str, "{"))
 			return syntax_array(vm, ss, r);
 
-		else if (!cmp_str_tok("[", ss->tok.begin, ss->tok.end))
+		else if (!string_cmp_cstr(&ss->tok.str, "["))
 			return syntax_quot(vm, ss, r);
 
-		else if (!cmp_str_tok(":", ss->tok.begin, ss->tok.end)) {
+		else if (!string_cmp_cstr(&ss->tok.str, ":")) {
 			syntax_definition(vm, ss);
 			return string_next_value(vm, ss, r);
 
-		} else if (*ss->tok.begin == ':')
-			*r = mk_symbol(ss->tok.begin, ss->tok.end);
+		} else if (*ss->tok.str.b == ':')
+			*r = mk_symbol(&ss->tok.str);
 
 		else
-			*r = mk_word(ss->tok.begin, ss->tok.end);
+			*r = mk_word(&ss->tok.str);
 		break;
 
 	default:
@@ -838,15 +764,13 @@ static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *
 	return true;
 }
 
-static struct array *_read(struct vm *vm, const char *b, const char *e)
+static struct array *_read(struct vm *vm, struct string *str)
 {
 	value_t v;
 	struct string_source in;
 	value_t a = mk_array();
 
-	in.in.begin = b;
-	in.in.end = e;
-
+	in.in = *str;
 	while (string_next_value(vm, &in, &v))
 		append_array(a, v);
 
@@ -857,7 +781,7 @@ static void load_file(struct vm *vm, const char *path)
 {
 	int fd;
 	struct stat info;
-	char *b, *e;
+	struct string input;
 	struct array *code;
 
 	if (stat(path, &info) < 0) {
@@ -871,16 +795,16 @@ static void load_file(struct vm *vm, const char *path)
 		exit(1);
 	}
 
-	b = mmap(NULL, info.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (!b) {
+	input.b = mmap(NULL, info.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (!input.b) {
 		fprintf(stderr, "couldn't mmap '%s'\n", path);
 		exit(1);
 	}
-	e = b + info.st_size;
+	input.e = input.b + info.st_size;
 
-	code = _read(vm, b, e);
+	code = _read(vm, &input);
 	eval(vm, code);
-	munmap(b, info.st_size);
+	munmap(input.b, info.st_size);
 	close(fd);
 }
 
@@ -891,7 +815,7 @@ static void print_stack(struct stack *s)
 {
 	unsigned i;
 
-	printf("\n ~~~ stack ~~~\n");
+	printf("\n--- Data stack:\n");
 	for (i = 0; i < s->nr_entries; i++) {
 		print_value(stdout, s->values[i]);
 		printf("\n");
@@ -902,6 +826,7 @@ static void print_stack(struct stack *s)
 static int repl(struct vm *vm)
 {
 	char buffer[4096];
+	struct string input;
 
 	for (;;) {
 		printf("dmexec> ");
@@ -910,7 +835,9 @@ static int repl(struct vm *vm)
 		if (!fgets(buffer, sizeof(buffer), stdin))
 			break;
 
-		eval(vm, _read(vm, buffer, buffer + strlen(buffer)));
+		input.b = buffer;
+		input.e = buffer + strlen(buffer);
+		eval(vm, _read(vm, &input));
 		print_stack(&vm->k->stack);
 	}
 

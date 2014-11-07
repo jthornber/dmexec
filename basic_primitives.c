@@ -4,8 +4,6 @@
 
 #include "vm.h"
 
-/*----------------------------------------------------------------*/
-
 /*----------------------------------------------------------------
  * Primitives
  *--------------------------------------------------------------*/
@@ -246,6 +244,26 @@ static void choice(struct vm *vm)
 		PUSH(t);
 }
 
+static void mk_tuple(struct vm *vm)
+{
+	unsigned i;
+	value_t name = POP();
+	int count = as_fixnum(POP());
+	struct array *a = alloc(TUPLE, sizeof(*a));
+	value_t r = mk_ref(a);
+
+	a->nr_elts = count + 1;
+	append_array(r, name);
+
+	for (i = 0; i < count; i++)
+		append_array(r, PEEKN(i));
+
+	for (i = 0; i < count; i++)
+		POP();
+
+	PUSH(r);
+}
+
 void add_basic_primitives(struct vm *vm)
 {
 	add_primitive(vm, "clear", clear);
@@ -275,6 +293,8 @@ void add_basic_primitives(struct vm *vm)
 
 	add_primitive(vm, "callcc0", callcc0);
 	add_primitive(vm, "continue", continue_cc);
+
+	add_primitive(vm, "mk-tuple", mk_tuple);
 }
 
 /*----------------------------------------------------------------*/

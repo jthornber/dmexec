@@ -22,6 +22,7 @@ LIBS=
 SOURCE=\
 	basic_primitives.c \
 	dm-primitives.c \
+	string_type.c \
 	vm.c \
 
 OBJECTS:=$(subst .c,.o,$(SOURCE))

@@ -3,8 +3,11 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "list.h"
+#include "mm.h"
+#include "string_type.h"
 
 /*----------------------------------------------------------------*/
 
@@ -52,9 +55,7 @@ enum token_type {
 
 struct token {
 	enum token_type type;
-	const char *begin;
-	const char *end;
-
+	struct string str;
 	int fixnum;
 };
 
@@ -83,22 +84,7 @@ void pop_call(struct vm *vm);
 value_t mk_string(const char *b, const char *e);
 void add_primitive(struct vm *vm, const char *name, prim_fn fn);
 
-enum object_type {
-	STRING,
-	BYTE_ARRAY,
-	TUPLE,
-	SYMBOL,
-	WORD,
-	QUOT,
-	ARRAY,
-	DEF,
-	CODE_POSITION,
-	CONTINUATION,
-	FIXNUM			/* these are always tagged immediate values */
-};
-
 enum object_type get_type(value_t v);
-void *alloc(enum object_type type, size_t s);
 value_t mk_ref(void *ptr);
 
 #define MAX_ARRAY_SIZE 32

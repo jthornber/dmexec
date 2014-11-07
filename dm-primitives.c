@@ -11,9 +11,9 @@
 
 /*----------------------------------------------------------------*/
 
-static value_t mk_c_string(const char *str)
+static value_t mk_c_string(char *str)
 {
-	return mk_string(str, str + strlen(str));
+	return mk_ref(string_clone_cstr(str));
 }
 
 static int open_control_file()
