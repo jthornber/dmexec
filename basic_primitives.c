@@ -156,7 +156,8 @@ static void swap(struct vm *vm)
 
 static void dip(struct vm *vm)
 {
-#if 0
+#if 1
+	// bi only works with this branch
 	value_t q = POP();
 	value_t x = POP();
 
