@@ -560,7 +560,6 @@ static void eval_value(struct vm *vm, value_t v)
 	const char *b;
 	struct primitive *p;
 	struct string *w;
-	struct array *body;
 	struct header *h;
 	value_t def;
 
@@ -599,8 +598,7 @@ static void eval_value(struct vm *vm, value_t v)
 					break;
 
 				case QUOT:
-					body = as_ref(def);
-					push_call(vm, body);
+					push_call(vm, as_ref(def));
 					break;
 
 				default:
