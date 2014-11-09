@@ -527,7 +527,7 @@ void add_primitive(struct vm *vm, char *name, prim_fn fn)
 	namespace_insert(vm->current_ns, &k, mk_ref(p));
 }
 
-static void add_word_def(struct vm *vm, struct string *w, struct array *body)
+static void def_word(struct vm *vm, struct string *w, struct array *body)
 {
 	namespace_insert(vm->current_ns, w, mk_ref(body));
 }
@@ -720,7 +720,7 @@ static void syntax_definition(struct vm *vm, struct string_source *ss)
 	       string_cmp_cstr(&ss->tok.str, ";"))
 		append_array(body, v);
 
-	add_word_def(vm, as_ref(w), as_ref(body));
+	def_word(vm, as_ref(w), as_ref(body));
 }
 
 static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *r)
