@@ -609,9 +609,6 @@ static void eval_value(struct vm *vm, value_t v)
 		case TUPLE:
 		case QUOT:
 		case CONTINUATION:
-			PUSH(v);
-			break;
-
 		case SYMBOL:
 			PUSH(v);
 			break;
