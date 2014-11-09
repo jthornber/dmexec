@@ -7,7 +7,7 @@
 
 //----------------------------------------------------------------
 
-static void to_string(char *cstr, struct string *str)
+void string_tmp(char *cstr, struct string *str)
 {
 	str->b = cstr;
 	str->e = cstr + strlen(cstr);
@@ -27,7 +27,7 @@ struct string *string_clone(struct string *str)
 struct string *string_clone_cstr(char *str)
 {
 	struct string tmp;
-	to_string(str, &tmp);
+	string_tmp(str, &tmp);
 	return string_clone(&tmp);
 }
 
@@ -52,7 +52,7 @@ int string_cmp(struct string *lhs, struct string *rhs)
 int string_cmp_cstr(struct string *lhs, char *rhs)
 {
 	struct string tmp;
-	to_string(rhs, &tmp);
+	string_tmp(rhs, &tmp);
 	return string_cmp(lhs, &tmp);
 }
 

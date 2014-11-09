@@ -520,10 +520,11 @@ static void init_vm(struct vm *vm)
 void add_primitive(struct vm *vm, char *name, prim_fn fn)
 {
 	struct primitive *p = alloc(PRIMITIVE, sizeof(*p));
-	struct string *k = string_clone_cstr(name); // FIXME: redundant copy
+	struct string k;
 
+	string_tmp(name, &k);
 	p->fn = fn;
-	namespace_insert(vm->current_ns, k, mk_ref(p));
+	namespace_insert(vm->current_ns, &k, mk_ref(p));
 }
 
 static void add_word_def(struct vm *vm, struct string *w, struct array *body)

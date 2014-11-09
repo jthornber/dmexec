@@ -8,6 +8,8 @@ struct string {
 	char *e;
 };
 
+void string_tmp(char *cstr, struct string *str);
+
 inline unsigned string_len(struct string *str)
 {
 	return str->e - str->b;
