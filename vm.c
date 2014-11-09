@@ -532,30 +532,6 @@ static void def_word(struct vm *vm, struct string *w, struct array *body)
 	namespace_insert(vm->current_ns, w, mk_ref(body));
 }
 
-#if 0
-static struct primitive *find_primitive(struct vm *vm, struct string *w)
-{
-	struct primitive *p;
-
-	list_for_each_entry (p, &vm->prims, list)
-		if (!string_cmp_cstr(w, p->name))
-			return p;
-
-	return NULL;
-}
-
-static struct array *find_word_def(struct vm *vm, struct string *w)
-{
-	struct def *d;
-
-	list_for_each_entry (d, &vm->definitions, list)
-		if (!string_cmp(w, d->w))
-			return d->body;
-
-	return NULL;
-}
-#endif
-
 void push_call(struct vm *vm, struct array *code)
 {
 	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
