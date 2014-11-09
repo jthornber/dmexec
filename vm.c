@@ -634,7 +634,7 @@ static void eval_value(struct vm *vm, value_t v)
 
 			} else {
 				// FIXME: add better error handling
-				fprintf(stderr, "couldn't find primitive '");
+				fprintf(stderr, "couldn't lookup word '");
 				for (b = w->b; b != w->e; b++)
 					fprintf(stderr, "%c", *b);
 				fprintf(stderr, "'\n");
