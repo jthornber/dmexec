@@ -11,17 +11,6 @@
 
 /*----------------------------------------------------------------*/
 
-enum tag {
-	TAG_REF = 0,
-	TAG_FIXNUM = 1,
-	TAG_FALSE
-};
-
-typedef union value {
-	void *ptr;
-	int32_t i;
-} value_t;
-
 #define MAX_STACK 8192
 
 struct stack {
@@ -65,9 +54,7 @@ struct continuation {
 };
 
 struct vm {
-	struct list_head prims;
-	struct list_head definitions;
-
+	struct namespace *current_ns;
 	struct continuation *k;
 };
 
@@ -82,10 +69,7 @@ void push_call(struct vm *vm, struct array *code);
 void pop_call(struct vm *vm);
 
 value_t mk_string(const char *b, const char *e);
-void add_primitive(struct vm *vm, const char *name, prim_fn fn);
-
-enum object_type get_type(value_t v);
-value_t mk_ref(void *ptr);
+void add_primitive(struct vm *vm, char *k, prim_fn fn);
 
 #define MAX_ARRAY_SIZE 32
 
@@ -96,7 +80,6 @@ struct array {
 };
 
 void eval(struct vm *vm, struct array *code);
-void *as_ref(value_t v);
 value_t mk_quot();
 value_t mk_array();
 void append_array(value_t av, value_t v);

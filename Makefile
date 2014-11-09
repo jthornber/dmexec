@@ -22,6 +22,7 @@ LIBS=
 SOURCE=\
 	basic_primitives.c \
 	dm-primitives.c \
+	namespace.c \
 	string_type.c \
 	vm.c \
 

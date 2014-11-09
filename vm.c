@@ -10,9 +10,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "vm.h"
-#include "string_type.h"
+#include "namespace.h"
 #include "primitives.h"
+#include "string_type.h"
+#include "vm.h"
 
 //----------------------------------------------------------------
 // Math utils
@@ -300,6 +301,18 @@ void print_value(FILE *stream, value_t v)
 	case TAG_REF:
 		h = get_header(v);
 		switch (h->type) {
+		case NAMESPACE:
+			fprintf(stream, "~namespace~");
+			break;
+
+		case NAMESPACE_ENTRY:
+			fprintf(stream, "~namespace entry~");
+			break;
+
+		case PRIMITIVE:
+			fprintf(stream, "~primitive~");
+			break;
+
 		case STRING:
 			print_string(stream, (struct string *) v.ptr);
 			break;
@@ -323,10 +336,6 @@ void print_value(FILE *stream, value_t v)
 
 		case ARRAY:
 			print_array(stream, (struct array *) v.ptr);
-			break;
-
-		case DEF:
-			fprintf(stream, "~def~");
 			break;
 
 		case CODE_POSITION:
@@ -486,15 +495,7 @@ static bool scan(struct string *in, struct token *result)
 // Interpreter
 
 struct primitive {
-	struct list_head list;
-	char *name;
 	prim_fn fn;
-};
-
-struct def {
-	struct list_head list;
-	struct string *w;
-	struct array *body;
 };
 
 struct dynamic_scope {
@@ -511,24 +512,26 @@ static void init_continuation(struct continuation *k)
 static void init_vm(struct vm *vm)
 {
 	memset(vm, 0, sizeof(*vm));
-	INIT_LIST_HEAD(&vm->prims);
-	INIT_LIST_HEAD(&vm->definitions);
+	vm->current_ns = namespace_create();
 	vm->k = zalloc(CONTINUATION, sizeof(*vm->k));
 	init_continuation(vm->k);
 }
 
-void add_primitive(struct vm *vm, const char *name, prim_fn fn)
+void add_primitive(struct vm *vm, char *name, prim_fn fn)
 {
-	// FIXME: should this be managed by the mm?
-	struct primitive *p = malloc(sizeof(*p));
+	struct primitive *p = alloc(PRIMITIVE, sizeof(*p));
+	struct string *k = string_clone_cstr(name); // FIXME: redundant copy
 
-	assert(p);
-	p->name = strdup(name);
 	p->fn = fn;
-
-	list_add(&p->list, &vm->prims);
+	namespace_insert(vm->current_ns, k, mk_ref(p));
 }
 
+static void add_word_def(struct vm *vm, struct string *w, struct array *body)
+{
+	namespace_insert(vm->current_ns, w, mk_ref(body));
+}
+
+#if 0
 static struct primitive *find_primitive(struct vm *vm, struct string *w)
 {
 	struct primitive *p;
@@ -538,14 +541,6 @@ static struct primitive *find_primitive(struct vm *vm, struct string *w)
 			return p;
 
 	return NULL;
-}
-
-static void add_word_def(struct vm *vm, struct string *w, struct array *body)
-{
-	struct def *d = zalloc(DEF, sizeof(*d));
-	list_add(&d->list, &vm->definitions);
-	d->w = w;
-	d->body = body;
 }
 
 static struct array *find_word_def(struct vm *vm, struct string *w)
@@ -558,6 +553,7 @@ static struct array *find_word_def(struct vm *vm, struct string *w)
 
 	return NULL;
 }
+#endif
 
 void push_call(struct vm *vm, struct array *code)
 {
@@ -589,6 +585,7 @@ static void eval_value(struct vm *vm, value_t v)
 	struct string *w;
 	struct array *body;
 	struct header *h;
+	value_t def;
 
 	switch (get_tag(v)) {
 	case TAG_FIXNUM:
@@ -602,6 +599,9 @@ static void eval_value(struct vm *vm, value_t v)
 	case TAG_REF:
 		h = get_header(v);
 		switch (h->type) {
+		case NAMESPACE:
+		case NAMESPACE_ENTRY:
+		case PRIMITIVE:
 		case STRING:
 		case ARRAY:
 		case BYTE_ARRAY:
@@ -617,19 +617,24 @@ static void eval_value(struct vm *vm, value_t v)
 
 		case WORD:
 			w = as_ref(v);
-			p = find_primitive(vm, w);
-			if (p) {
-				p->fn(vm);
-				break;
-			}
+			if (namespace_lookup(vm->current_ns, w, &def)) {
+				switch (get_type(def)) {
+				case PRIMITIVE:
+					p = as_ref(def);
+					p->fn(vm);
+					break;
 
-			body = find_word_def(vm, w);
-			if (body) {
-				push_call(vm, body);
-				break;
-			}
+				case QUOT:
+					body = as_ref(def);
+					push_call(vm, body);
+					break;
 
-			{
+				default:
+					fprintf(stderr, "bad def\n");
+					exit(1);
+				}
+
+			} else {
 				// FIXME: add better error handling
 				fprintf(stderr, "couldn't find primitive '");
 				for (b = w->b; b != w->e; b++)
@@ -644,7 +649,6 @@ static void eval_value(struct vm *vm, value_t v)
 			break;
 
 		case CODE_POSITION:
-		case DEF:
 			fprintf(stderr, "unexpected value\n");
 			break;
 		}
