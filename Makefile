@@ -20,8 +20,10 @@ INCLUDES=\
 LIBS=
 
 SOURCE=\
+	array.c \
 	basic_primitives.c \
 	dm-primitives.c \
+	mm.c \
 	namespace.c \
 	string_type.c \
 	vm.c \

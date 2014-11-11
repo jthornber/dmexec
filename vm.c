@@ -24,137 +24,6 @@ unsigned round_up(unsigned n, unsigned pow)
 }
 
 //----------------------------------------------------------------
-// Values - immediate or reference
-//
-// The bottom 2 bits are used for tagging.
-
-static enum tag get_tag(value_t v)
-{
-	return v.i & 0x3;
-}
-
-value_t mk_fixnum(int i)
-{
-	value_t v;
-	v.i = (i << 2) | TAG_FIXNUM;
-	return v;
-}
-
-unsigned as_fixnum(value_t v)
-{
-	assert(get_tag(v) == TAG_FIXNUM);
-	return v.i >> 2;
-}
-
-value_t mk_ref(void *ptr)
-{
-	value_t v;
-	v.ptr = ptr;
-	return v;
-}
-
-void *as_ref(value_t v)
-{
-	assert(get_tag(v) == TAG_REF);
-	return v.ptr;
-}
-
-static value_t mk_false()
-{
-	value_t v;
-	v.i = TAG_FALSE;
-	return v;
-}
-
-bool is_false(value_t v)
-{
-	return v.i == TAG_FALSE;
-}
-
-//----------------------------------------------------------------
-// Objects
-
-#define HEADER_MAGIC 846219U
-
-struct header {
-	enum object_type type;
-	unsigned size; 		/* in bytes, we always round to a 4 byte boundary */
-	unsigned magic;
-};
-
-//----------------------------------------------------------------
-// Memory manager
-
-// FIXME: use the valgrind api to allow it to check for accesses to garbage
-
-static struct {
-	size_t total_allocated;
-	size_t total_collected;
-	size_t current_allocated;
-	size_t max_allocated;
-	unsigned nr_gcs;
-
-} memory_stats_;
-
-static void out_of_memory()
-{
-	fprintf(stderr, "Out of memory.\n");
-	exit(1);
-}
-
-void *alloc(enum object_type type, size_t s)
-{
-	size_t len = s + sizeof(struct header);
-	struct header *h = malloc(len);
-
-	if (!h)
-		out_of_memory();
-
-	h->type = type;
-	h->size = s;
-	h->magic = HEADER_MAGIC;
-
-	memory_stats_.total_allocated += len;
-	return ((char *) (h + 1));
-}
-
-static void *zalloc(enum object_type type, size_t s)
-{
-	void *ptr = alloc(type, s);
-	memset(ptr, 0, s);
-	return ptr;
-}
-
-static struct header *obj_to_header(void *obj)
-{
-	return ((struct header *) obj) - 1;
-}
-
-static struct header *get_header(value_t v)
-{
-	struct header *h = obj_to_header(v.ptr);
-	assert(h->magic == HEADER_MAGIC);
-	return h;
-};
-
-enum object_type get_type(value_t v)
-{
-	struct header *h;
-
-	if (get_tag(v) == TAG_FIXNUM)
-		return FIXNUM;
-
-	h = get_header(v);
-	return h->type;
-}
-
-static void set_type(void *obj, enum object_type t)
-{
-	struct header *h = obj_to_header(obj);
-	h->type = t;
-}
-
-//----------------------------------------------------------------
 // Words
 value_t mk_word_like(enum object_type type, struct string *str)
 {
@@ -173,6 +42,7 @@ value_t mk_word(struct string *str)
 	return mk_word_like(WORD, str);
 }
 
+#if 0
 //----------------------------------------------------------------
 // Byte array
 
@@ -210,32 +80,15 @@ void push_byte(struct byte_array *ba, unsigned b)
 
 	ba->bytes[ba->len++] = b;
 }
-
+#endif
 //----------------------------------------------------------------
-// Arrays
-
-value_t mk_array()
-{
-	struct array *a = alloc(ARRAY, sizeof(*a));
-	memset(a, 0, sizeof(*a));
-	a->nr_elts = 0;
-	return mk_ref(a);
-}
+// Quotations
 
 value_t mk_quot()
 {
-	struct array *a = alloc(QUOT, sizeof(*a));
-	memset(a, 0, sizeof(*a));
-	a->nr_elts = 0;
+	struct array *a = as_ref(mk_array());
+	set_type(a, QUOT);
 	return mk_ref(a);
-}
-
-void append_array(value_t av, value_t v)
-{
-	struct array *a = as_ref(av);
-
-	assert(a->nr_elts < MAX_ARRAY_SIZE);
-	a->elts[a->nr_elts++] = v;
 }
 
 //----------------------------------------------------------------
@@ -832,7 +685,7 @@ int main(int argc, char **argv)
 
 	repl(&vm);
 	printf("\n\ntotal allocated: %llu\n",
-	       (unsigned long long) memory_stats_.total_allocated);
+	       (unsigned long long) get_memory_stats()->total_allocated);
 
 	return 0;
 }

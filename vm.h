@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "array.h"
 #include "list.h"
 #include "mm.h"
 #include "string_type.h"
@@ -71,18 +72,8 @@ void pop_call(struct vm *vm);
 value_t mk_string(const char *b, const char *e);
 void def_primitive(struct vm *vm, char *k, prim_fn fn);
 
-#define MAX_ARRAY_SIZE 32
-
-// FIXME: add dynamic resizing
-struct array {
-	unsigned nr_elts;
-	value_t elts[MAX_ARRAY_SIZE]; /* yee haa! */
-};
-
 void eval(struct vm *vm, struct array *code);
 value_t mk_quot();
-value_t mk_array();
-void append_array(value_t av, value_t v);
 void print_value(FILE *stream, value_t v);
 unsigned as_fixnum(value_t v);
 value_t mk_fixnum(int i);
