@@ -517,7 +517,7 @@ static void init_vm(struct vm *vm)
 	init_continuation(vm->k);
 }
 
-void add_primitive(struct vm *vm, char *name, prim_fn fn)
+void def_primitive(struct vm *vm, char *name, prim_fn fn)
 {
 	struct primitive *p = alloc(PRIMITIVE, sizeof(*p));
 	struct string k;
@@ -825,8 +825,8 @@ int main(int argc, char **argv)
 	struct vm vm;
 
 	init_vm(&vm);
-	add_basic_primitives(&vm);
-	add_dm_primitives(&vm);
+	def_basic_primitives(&vm);
+	def_dm_primitives(&vm);
 
 	load_file(&vm, "prelude.dm");
 

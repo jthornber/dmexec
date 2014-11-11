@@ -265,37 +265,37 @@ static void mk_tuple(struct vm *vm)
 	PUSH(r);
 }
 
-void add_basic_primitives(struct vm *vm)
+void def_basic_primitives(struct vm *vm)
 {
-	add_primitive(vm, "clear", clear);
-	add_primitive(vm, ".", dot);
-	add_primitive(vm, "ndrop", ndrop);
-	add_primitive(vm, "nnip", nnip);
-	add_primitive(vm, "dup", _dup);
-	add_primitive(vm, "2dup", _dup2);
-	add_primitive(vm, "3dup", _dup3);
-	add_primitive(vm, "over", over);
-	add_primitive(vm, "2over", over2);
-	add_primitive(vm, "pick", pick);
-	add_primitive(vm, "swap", swap);
-	add_primitive(vm, "dip", dip);
+	def_primitive(vm, "clear", clear);
+	def_primitive(vm, ".", dot);
+	def_primitive(vm, "ndrop", ndrop);
+	def_primitive(vm, "nnip", nnip);
+	def_primitive(vm, "dup", _dup);
+	def_primitive(vm, "2dup", _dup2);
+	def_primitive(vm, "3dup", _dup3);
+	def_primitive(vm, "over", over);
+	def_primitive(vm, "2over", over2);
+	def_primitive(vm, "pick", pick);
+	def_primitive(vm, "swap", swap);
+	def_primitive(vm, "dip", dip);
 
-	add_primitive(vm, "+", fixnum_add);
-	add_primitive(vm, "-", fixnum_sub);
-	add_primitive(vm, "*", fixnum_mult);
-	add_primitive(vm, "/", fixnum_div);
+	def_primitive(vm, "+", fixnum_add);
+	def_primitive(vm, "-", fixnum_sub);
+	def_primitive(vm, "*", fixnum_mult);
+	def_primitive(vm, "/", fixnum_div);
 
-	add_primitive(vm, "call", call);
-	add_primitive(vm, "curry", curry);
+	def_primitive(vm, "call", call);
+	def_primitive(vm, "curry", curry);
 
-	add_primitive(vm, "?", choice);
+	def_primitive(vm, "?", choice);
 
-	add_primitive(vm, "each", each);
+	def_primitive(vm, "each", each);
 
-	add_primitive(vm, "callcc0", callcc0);
-	add_primitive(vm, "continue", continue_cc);
+	def_primitive(vm, "callcc0", callcc0);
+	def_primitive(vm, "continue", continue_cc);
 
-	add_primitive(vm, "mk-tuple", mk_tuple);
+	def_primitive(vm, "mk-tuple", mk_tuple);
 }
 
 /*----------------------------------------------------------------*/

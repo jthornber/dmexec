@@ -69,7 +69,7 @@ void push_call(struct vm *vm, struct array *code);
 void pop_call(struct vm *vm);
 
 value_t mk_string(const char *b, const char *e);
-void add_primitive(struct vm *vm, char *k, prim_fn fn);
+void def_primitive(struct vm *vm, char *k, prim_fn fn);
 
 #define MAX_ARRAY_SIZE 32
 

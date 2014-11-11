@@ -111,11 +111,11 @@ static void dm_list_devices(struct vm *vm)
 
 /*----------------------------------------------------------------*/
 
-void add_dm_primitives(struct vm *vm)
+void def_dm_primitives(struct vm *vm)
 {
-	add_primitive(vm, "dm-version", dm_version);
-	add_primitive(vm, "dm-remove-all", dm_remove_all);
-	add_primitive(vm, "dm-list-devices", dm_list_devices);
+	def_primitive(vm, "dm-version", dm_version);
+	def_primitive(vm, "dm-remove-all", dm_remove_all);
+	def_primitive(vm, "dm-list-devices", dm_list_devices);
 }
 
 /*----------------------------------------------------------------*/
