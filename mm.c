@@ -48,9 +48,24 @@ static struct header *obj_to_header(void *obj)
 	return ((struct header *) obj) - 1;
 }
 
+void *as_ref(value_t v)
+{
+	void *obj = v.ptr;
+	struct header *h = obj_to_header(obj);
+
+	assert(get_tag(v) == TAG_REF);
+
+	while (h->type == FORWARD) {
+		obj = (void *) (h + 1);
+		h = obj_to_header(obj);
+	}
+
+	return obj;
+}
+
 struct header *get_header(value_t v)
 {
-	struct header *h = obj_to_header(v.ptr);
+	struct header *h = obj_to_header(as_ref(v));
 	assert(h->magic == HEADER_MAGIC);
 	return h;
 };
@@ -100,12 +115,6 @@ value_t mk_ref(void *ptr)
 	value_t v;
 	v.ptr = ptr;
 	return v;
-}
-
-void *as_ref(value_t v)
-{
-	assert(get_tag(v) == TAG_REF);
-	return v.ptr;
 }
 
 value_t mk_false()

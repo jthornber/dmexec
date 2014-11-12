@@ -6,6 +6,7 @@
 //----------------------------------------------------------------
 
 enum object_type {
+	FORWARD,
 	NAMESPACE,
 	NAMESPACE_ENTRY,
 	PRIMITIVE,
@@ -43,11 +44,13 @@ typedef union value {
 void *alloc(enum object_type type, size_t s);
 void *zalloc(enum object_type type, size_t s);
 
-struct header *get_header(value_t v);
-enum object_type get_type(value_t v);
 void set_type(void *obj, enum object_type t);
 value_t mk_ref(void *ptr);
+
+// functions that take a value_t automatically chase forward ptrs.
 void *as_ref(value_t v);
+struct header *get_header(value_t v);
+enum object_type get_type(value_t v);
 
 enum tag get_tag(value_t v);
 value_t mk_false();

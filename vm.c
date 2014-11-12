@@ -154,6 +154,11 @@ void print_value(FILE *stream, value_t v)
 	case TAG_REF:
 		h = get_header(v);
 		switch (h->type) {
+		case FORWARD:
+			fprintf(stderr, "unexpected fwd ptr\n");
+			exit(1);
+			break;
+
 		case NAMESPACE:
 			fprintf(stream, "~namespace~");
 			break;
@@ -428,6 +433,11 @@ static void eval_value(struct vm *vm, value_t v)
 	case TAG_REF:
 		h = get_header(v);
 		switch (h->type) {
+		case FORWARD:
+			fprintf(stderr, "unexpected fwd\n");
+			exit(1);
+			break;
+
 		case NAMESPACE:
 		case NAMESPACE_ENTRY:
 		case PRIMITIVE:
