@@ -80,7 +80,7 @@ static void dm_list_devices(struct vm *vm)
 	char buffer[8192];	/* FIXME: what if this buffer isn't big enough? */
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
 	struct dm_name_list *nl;
-	value_t results = mk_array();
+	value_t results = mk_ref(array_create(32));
 
 	init_ctl(ctl, sizeof(buffer));
 	if (dm_ioctl(vm, DM_LIST_DEVICES, ctl) < 0)
@@ -95,7 +95,7 @@ static void dm_list_devices(struct vm *vm)
 	if (nl->dev) {
 		while (true) {
 			fprintf(stderr, nl->name);
-			append_array(results, mk_c_string(nl->name));
+			array_push(as_ref(results), mk_c_string(nl->name));
 
 			if (!nl->next)
 				break;

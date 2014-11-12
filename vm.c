@@ -86,7 +86,7 @@ void push_byte(struct byte_array *ba, unsigned b)
 
 value_t mk_quot()
 {
-	struct array *a = as_ref(mk_array());
+	struct array *a = array_create(32);
 	set_type(a, QUOT);
 	return mk_ref(a);
 }
@@ -110,7 +110,7 @@ static void print_array_like(FILE *stream, struct array *a, char b, char e)
 
 	fprintf(stream, "%c ", b);
 	for (i = 0; i < a->nr_elts; i++) {
-		print_value(stream, a->elts[i]);
+		print_value(stream, array_get(a, i));
 		fprintf(stream, " ");
 	}
 	fprintf(stream, "%c", e);
@@ -489,7 +489,7 @@ void eval(struct vm *vm, struct array *code)
 		push_call(vm, code);
 		while (!list_empty(&vm->k->call_stack)) {
 			pc = list_first_entry(&vm->k->call_stack, struct code_position, list);
-			v = pc->code->elts[pc->position];
+			v = array_get(pc->code, pc->position);
 			inc_pc(vm);
 			eval_value(vm, v);
 		}
@@ -513,7 +513,7 @@ static bool syntax_quot(struct vm *vm, struct string_source *ss, value_t *r)
 	*r = mk_quot();
 	while (string_next_value(vm, ss, &r2) &&
 	       string_cmp_cstr(&ss->tok.str, "]"))
-		append_array(*r, r2);
+		array_push(as_ref(*r), r2);
 
 	return true;
 }
@@ -522,10 +522,10 @@ static bool syntax_array(struct vm *vm, struct string_source *ss, value_t *r)
 {
 	value_t r2;
 
-	*r = mk_array();
+	*r = mk_ref(array_create(32));
 	while (string_next_value(vm, ss, &r2) &&
 	       string_cmp_cstr(&ss->tok.str, "}"))
-		append_array(*r, r2);
+		array_push(as_ref(*r), r2);
 
 	return true;
 }
@@ -542,7 +542,7 @@ static void syntax_definition(struct vm *vm, struct string_source *ss)
 	body = mk_quot();
 	while (string_next_value(vm, ss, &v) &&
 	       string_cmp_cstr(&ss->tok.str, ";"))
-		append_array(body, v);
+		array_push(as_ref(body), v);
 
 	def_word(vm, as_ref(w), as_ref(body));
 }
@@ -597,11 +597,11 @@ static struct array *_read(struct vm *vm, struct string *str)
 {
 	value_t v;
 	struct string_source in;
-	value_t a = mk_array();
+	value_t a = mk_ref(array_create(32));
 
 	in.in = *str;
 	while (string_next_value(vm, &in, &v))
-		append_array(a, v);
+		array_push(as_ref(a), v);
 
 	return as_ref(a);
 }

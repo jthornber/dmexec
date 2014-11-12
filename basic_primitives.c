@@ -66,15 +66,16 @@ static void curry(struct vm *vm)
 {
 	value_t q = POP();
 	value_t obj = POP();
-	value_t new_q = mk_quot();
 	struct array *a = as_ref(q);
+	struct array *new_q;
 	unsigned i;
 
-	append_array(new_q, obj);
+	// FIXME: it would be nice to use array_unshift
+	new_q = quot_create(a->nr_elts + 1);
+	array_push(new_q, obj);
 	for (i = 0; i < a->nr_elts; i++)
-		append_array(new_q, a->elts[i]);
-
-	PUSH(new_q);
+		array_push(new_q, array_get(a, i));
+	PUSH(mk_ref(new_q));
 }
 
 static void dot(struct vm *vm)
@@ -162,7 +163,7 @@ static void dip(struct vm *vm)
 	value_t x = POP();
 
 	value_t after = mk_quot();
-	append_array(after, x);
+	array_push(as_ref(after), x);
 	push_call(vm, as_ref(after));
 
 	PUSH(q);
@@ -228,7 +229,7 @@ static void each(struct vm *vm)
 
 	ary = as_ref(a);
 	for (i = 0; i < ary->nr_elts; i++) {
-		PUSH(ary->elts[i]);
+		PUSH(array_get(ary, i));
 		push_call(vm, as_ref(q));
 	}
 }
@@ -254,10 +255,10 @@ static void mk_tuple(struct vm *vm)
 	value_t r = mk_ref(a);
 
 	a->nr_elts = count + 1;
-	append_array(r, name);
+	array_push(a, name);
 
 	for (i = 0; i < count; i++)
-		append_array(r, PEEKN(i));
+		array_push(a, PEEKN(i));
 
 	for (i = 0; i < count; i++)
 		POP();

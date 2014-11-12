@@ -5,16 +5,26 @@
 
 //----------------------------------------------------------------
 
-// FIXME: add dynamic resizing
-#define MAX_ARRAY_SIZE 32
-
 struct array {
 	unsigned nr_elts;
-	value_t elts[MAX_ARRAY_SIZE]; /* yee haa! */
+	unsigned nr_allocated;
 };
 
-value_t mk_array();
-void append_array(value_t av, value_t v);
+struct array *array_create(unsigned nr_alloc);
+struct array *quot_create(unsigned nr_alloc);
+struct array *array_resize(struct array *old, unsigned new_nr_alloc);
+
+value_t array_get(struct array *a, unsigned i);
+void array_set(struct array *a, unsigned i, value_t v);
+
+void array_push(struct array *a, value_t v);
+value_t array_pop(struct array *a);
+
+void array_unshift(struct array *a, value_t v);
+value_t array_shift(struct array *a);
+
+// FIXME: remove this interface
+//value_t mk_array();
 
 //----------------------------------------------------------------
 
