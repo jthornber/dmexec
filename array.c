@@ -1,11 +1,13 @@
 #include "array.h"
 
+#include "utils.h"
+
 #include <assert.h>
 #include <string.h>
 
 //----------------------------------------------------------------
 
-struct array *array_create(unsigned nr_alloc)
+struct array *__array_create(unsigned nr_alloc)
 {
 	struct array *a = alloc(ARRAY, sizeof(*a) + sizeof(value_t) * nr_alloc);
 	a->nr_elts = 0;
@@ -13,27 +15,30 @@ struct array *array_create(unsigned nr_alloc)
 	return a;
 }
 
-struct array *quot_create(unsigned nr_alloc)
+struct array *array_create()
 {
-	struct array *q = array_create(nr_alloc);
-	set_type(q, QUOT);
-	return q;
+	return __array_create(4);
 }
 
-struct array *array_resize(struct array *old, unsigned new_nr_alloc)
+struct array *quot_create()
 {
-	unsigned i;
-	struct array *new = alloc(ARRAY, new_nr_alloc);
-
-	for (i = 0; i < old->nr_elts; i++)
-		array_set(new, i, array_get(old, i));
-
-	return new;
+	struct array *q = __array_create(4);
+	set_type(q, QUOT);
+	return q;
 }
 
 static inline value_t *elt_ptr(struct array *a, unsigned i)
 {
 	return ((value_t *) (a + 1)) + i;
+}
+
+struct array *array_resize(struct array *a, unsigned new_nr_alloc)
+{
+	struct array *new = __array_create(new_nr_alloc);
+
+	memcpy(elt_ptr(new, 0), elt_ptr(a, 0), sizeof(value_t) * a->nr_elts);
+	replace_obj(a, new);
+	return new;
 }
 
 value_t array_get(struct array *a, unsigned i)
@@ -50,7 +55,9 @@ void array_set(struct array *a, unsigned i, value_t v)
 
 void array_push(struct array *a, value_t v)
 {
-	assert(a->nr_elts < a->nr_allocated); /* FIXME: throw */
+	if (a->nr_elts == a->nr_allocated)
+		a = array_resize(a, min(a->nr_elts * 2, a->nr_elts + 512));
+
 	a->nr_elts++;
 	*elt_ptr(a, a->nr_elts - 1) = v;
 }
@@ -67,7 +74,8 @@ value_t array_pop(struct array *a)
 
 void array_unshift(struct array *a, value_t v)
 {
-	assert(a->nr_elts < a->nr_allocated); /* FIXME: throw */
+	if (a->nr_elts == a->nr_allocated)
+		a = array_resize(a, min(a->nr_elts * 2, 512));
 
 	if (a->nr_elts)
 		memmove(elt_ptr(a, 1), elt_ptr(a, 0),
@@ -90,18 +98,6 @@ value_t array_shift(struct array *a)
 			sizeof(value_t) * a->nr_elts);
 
 	return v;
-}
-
-value_t mk_array()
-{
-	struct array *a = array_create(32);
-	return mk_ref(a);
-}
-
-void append_array(value_t av, value_t v)
-{
-	struct array *a = as_ref(av);
-	array_push(a, v);
 }
 
 //----------------------------------------------------------------

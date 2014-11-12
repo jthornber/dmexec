@@ -86,7 +86,7 @@ void push_byte(struct byte_array *ba, unsigned b)
 
 value_t mk_quot()
 {
-	struct array *a = array_create(32);
+	struct array *a = array_create();
 	set_type(a, QUOT);
 	return mk_ref(a);
 }
@@ -532,7 +532,7 @@ static bool syntax_array(struct vm *vm, struct string_source *ss, value_t *r)
 {
 	value_t r2;
 
-	*r = mk_ref(array_create(32));
+	*r = mk_ref(array_create());
 	while (string_next_value(vm, ss, &r2) &&
 	       string_cmp_cstr(&ss->tok.str, "}"))
 		array_push(as_ref(*r), r2);
@@ -607,7 +607,7 @@ static struct array *_read(struct vm *vm, struct string *str)
 {
 	value_t v;
 	struct string_source in;
-	value_t a = mk_ref(array_create(32));
+	value_t a = mk_ref(array_create());
 
 	in.in = *str;
 	while (string_next_value(vm, &in, &v))

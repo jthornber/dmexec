@@ -46,6 +46,7 @@ void *zalloc(enum object_type type, size_t s);
 
 void set_type(void *obj, enum object_type t);
 value_t mk_ref(void *ptr);
+void replace_obj(void *old_obj, void *new_obj);
 
 // functions that take a value_t automatically chase forward ptrs.
 void *as_ref(value_t v);

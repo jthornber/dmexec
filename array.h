@@ -10,8 +10,9 @@ struct array {
 	unsigned nr_allocated;
 };
 
-struct array *array_create(unsigned nr_alloc);
-struct array *quot_create(unsigned nr_alloc);
+struct array *array_create();
+struct array *quot_create();
+
 struct array *array_resize(struct array *old, unsigned new_nr_alloc);
 
 value_t array_get(struct array *a, unsigned i);

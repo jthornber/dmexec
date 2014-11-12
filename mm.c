@@ -56,11 +56,17 @@ void *as_ref(value_t v)
 	assert(get_tag(v) == TAG_REF);
 
 	while (h->type == FORWARD) {
-		obj = (void *) (h + 1);
+		obj = *((void **) (h + 1));
 		h = obj_to_header(obj);
 	}
 
 	return obj;
+}
+
+void replace_obj(void *old_obj, void *new_obj)
+{
+	set_type(old_obj, FORWARD);
+	*((void **) old_obj) = new_obj;
 }
 
 struct header *get_header(value_t v)
