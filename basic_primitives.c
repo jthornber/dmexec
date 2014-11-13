@@ -23,10 +23,8 @@ static void call(struct vm *vm)
 		break;
 
 	default:
-		fprintf(stderr, "not a callable: ");
-		print_value(stderr, callable);
-		fprintf(stderr, "\n");
-		exit(1);
+		error("not a callable");
+		//print_value(stderr, callable);
 	}
 }
 
@@ -55,10 +53,8 @@ static void continue_cc(struct vm *vm)
 {
 	value_t k = POP();
 
-	if (get_type(k) != CONTINUATION) {
-		fprintf(stderr, "not a continuation\n");
-		exit(1);
-	}
+	if (get_type(k) != CONTINUATION)
+		error("not a continuation");
 
 	vm->k = as_ref(k);
 }
@@ -230,15 +226,11 @@ static void each(struct vm *vm)
 	struct array *ary, *computation = quot_create();
 	unsigned i;
 
-	if (get_type(q) != QUOT) {
-		fprintf(stderr, "not a quotation\n");
-		exit(1);
-	}
+	if (get_type(q) != QUOT)
+		error("not a quotation");
 
-	if (get_type(a) != ARRAY) {
-		fprintf(stderr, "not an array\n");
-		exit(1);
-	}
+	if (get_type(a) != ARRAY)
+		error("not an array");
 
 	// Build up a single quotation that does all the work
 	ary = as_ref(a);
@@ -257,15 +249,11 @@ static void map(struct vm *vm)
 	struct array *ary, *computation = quot_create();
 	unsigned i;
 
-	if (get_type(q) != QUOT) {
-		fprintf(stderr, "not a quotation\n");
-		exit(1);
-	}
+	if (get_type(q) != QUOT)
+		error("not a quotation");
 
-	if (get_type(a) != ARRAY) {
-		fprintf(stderr, "not an array\n");
-		exit(1);
-	}
+	if (get_type(a) != ARRAY)
+		error("not an array");
 
 	// Build up a single quotation that does all the work
 	ary = as_ref(a);

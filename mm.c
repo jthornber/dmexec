@@ -7,6 +7,8 @@
 
 #define HEADER_MAGIC 846219U
 
+#include "error.h"
+
 //----------------------------------------------------------------
 // Memory manager
 
@@ -16,8 +18,7 @@ static struct memory_stats memory_stats_;
 
 static void out_of_memory()
 {
-	fprintf(stderr, "Out of memory.\n");
-	exit(1);
+	error("out of memory");
 }
 
 void *alloc(enum object_type type, size_t s)

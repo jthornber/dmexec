@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -162,8 +163,7 @@ void print_value(FILE *stream, value_t v)
 		h = get_header(v);
 		switch (h->type) {
 		case FORWARD:
-			fprintf(stderr, "unexpected fwd ptr\n");
-			exit(1);
+			error("unexpected fwd ptr");
 			break;
 
 		case NAMESPACE:
@@ -280,10 +280,8 @@ static bool scan_string(struct string *in, struct token *result)
 
 	result->str.e = in->b;
 
-	if (!more_input(in)) {
-		fprintf(stderr, "bad string\n");
-		exit(1);
-	}
+	if (!more_input(in))
+		error("bad string");
 
 	step_input(in);
 
@@ -388,7 +386,6 @@ static void inc_pc(struct vm *vm)
 
 static void eval_value(struct vm *vm, value_t v)
 {
-	const char *b;
 	struct primitive *p;
 	struct string *w;
 	struct header *h;
@@ -407,8 +404,7 @@ static void eval_value(struct vm *vm, value_t v)
 		h = get_header(v);
 		switch (h->type) {
 		case FORWARD:
-			fprintf(stderr, "unexpected fwd\n");
-			exit(1);
+			error("unexpected fwd");
 			break;
 
 		case NAMESPACE:
@@ -438,26 +434,24 @@ static void eval_value(struct vm *vm, value_t v)
 					break;
 
 				default:
-					fprintf(stderr, "bad def\n");
-					exit(1);
+					error("bad def");
 				}
 
 			} else {
 				// FIXME: add better error handling
-				fprintf(stderr, "couldn't lookup word '");
-				for (b = w->b; b != w->e; b++)
-					fprintf(stderr, "%c", *b);
-				fprintf(stderr, "'\n");
-				exit(1);
+				error("couldn't lookup word");
+				//for (b = w->b; b != w->e; b++)
+				//	fprintf(stderr, "%c", *b);
+				//fprintf(stderr, "'\n");
 			}
 			break;
 
 		case FIXNUM:
-			fprintf(stderr, "we shouldn't ever have non immediate fixnum objects\n");
+			error("we shouldn't ever have non immediate fixnum objects");
 			break;
 
 		case CODE_POSITION:
-			fprintf(stderr, "unexpected value\n");
+			error("unexpected value");
 			break;
 		}
 	}
@@ -518,7 +512,7 @@ static void syntax_definition(struct vm *vm, struct string_source *ss)
 	value_t w, body, v;
 
 	if (!string_next_value(vm, ss, &w)) {
-		fprintf(stderr, "bad definition");
+		error("bad definition");
 		exit(1);
 	}
 
@@ -596,22 +590,17 @@ static void load_file(struct vm *vm, const char *path)
 	struct string input;
 	struct array *code;
 
-	if (stat(path, &info) < 0) {
-		fprintf(stderr, "couldn't stat '%s'\n", path);
-		exit(1);
-	}
+	if (stat(path, &info) < 0)
+		error("couldn't stat '%s'\n", path);
 
 	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		fprintf(stderr, "couldn't open '%s'\n", path);
-		exit(1);
-	}
+	if (fd < 0)
+		error("couldn't open '%s'\n", path);
 
 	input.b = mmap(NULL, info.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (!input.b) {
-		fprintf(stderr, "couldn't mmap '%s'\n", path);
-		exit(1);
-	}
+	if (!input.b)
+		error("couldn't mmap '%s'\n", path);
+
 	input.e = input.b + info.st_size;
 
 	code = _read(vm, &input);
@@ -622,6 +611,18 @@ static void load_file(struct vm *vm, const char *path)
 
 //----------------------------------------------------------------
 // Top level
+
+void error(const char *format, ...)
+{
+	va_list ap;
+
+	va_start(ap, format);
+	vfprintf(stderr, format, ap);
+	va_end(ap);
+
+	fprintf(stderr, "\n");
+	exit(1);
+}
 
 static void print_stack(value_t s)
 {

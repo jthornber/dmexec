@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "array.h"
+#include "error.h"
 #include "list.h"
 #include "mm.h"
 #include "string_type.h"
