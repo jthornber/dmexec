@@ -18,14 +18,18 @@ struct array *array_resize(struct array *old, unsigned new_nr_alloc);
 value_t array_get(struct array *a, unsigned i);
 void array_set(struct array *a, unsigned i, value_t v);
 
-void array_push(struct array *a, value_t v);
+struct array *array_push(struct array *a, value_t v);
 value_t array_pop(struct array *a);
 
-void array_unshift(struct array *a, value_t v);
+value_t array_peek(struct array *a);
+value_t array_peekn(struct array *a, unsigned n);
+
+struct array *array_unshift(struct array *a, value_t v);
 value_t array_shift(struct array *a);
 
-// FIXME: remove this interface
-//value_t mk_array();
+struct array *array_concat(struct array *a, struct array *a2);
+
+void array_reverse(struct array *a);
 
 //----------------------------------------------------------------
 

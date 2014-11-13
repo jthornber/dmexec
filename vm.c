@@ -28,7 +28,7 @@ unsigned round_up(unsigned n, unsigned pow)
 value_t mk_word_like(enum object_type type, struct string *str)
 {
 	struct string *w = string_clone(str);
-	set_type(w, WORD);
+	set_obj_type(w, WORD);
 	return mk_ref(w);
 }
 
@@ -40,6 +40,13 @@ value_t mk_symbol(struct string *str)
 value_t mk_word(struct string *str)
 {
 	return mk_word_like(WORD, str);
+}
+
+value_t mk_word_cstr(char *str)
+{
+	struct string tmp;
+	string_tmp(str, &tmp);
+	return mk_word(&tmp);
 }
 
 #if 0
@@ -87,7 +94,7 @@ void push_byte(struct byte_array *ba, unsigned b)
 value_t mk_quot()
 {
 	struct array *a = array_create();
-	set_type(a, QUOT);
+	set_obj_type(a, QUOT);
 	return mk_ref(a);
 }
 
@@ -217,40 +224,6 @@ void print_value(FILE *stream, value_t v)
 }
 
 //----------------------------------------------------------------
-// Stack engine
-
-void init_stack(struct stack *s)
-{
-	s->nr_entries = 0;
-}
-
-void push(struct stack *s, value_t v)
-{
-	assert(s->nr_entries < MAX_STACK);
-	s->values[s->nr_entries++] = v;
-}
-
-value_t peek(struct stack *s)
-{
-	assert(s->nr_entries);
-	return s->values[s->nr_entries - 1];
-}
-
-value_t peekn(struct stack *s, unsigned n)
-{
-	assert(s->nr_entries > n);
-	return s->values[s->nr_entries - n - 1];
-}
-
-value_t pop(struct stack *s)
-{
-	assert(s->nr_entries);
-	s->nr_entries--;
-
-	return s->values[s->nr_entries];
-}
-
-//----------------------------------------------------------------
 // Lexer
 
 static bool more_input(struct string *in)
@@ -363,7 +336,7 @@ struct dynamic_scope {
 
 static void init_continuation(struct continuation *k)
 {
-	init_stack(&k->stack);
+	k->stack = mk_ref(array_create());
 	INIT_LIST_HEAD(&k->call_stack);
 }
 
@@ -650,13 +623,14 @@ static void load_file(struct vm *vm, const char *path)
 //----------------------------------------------------------------
 // Top level
 
-static void print_stack(struct stack *s)
+static void print_stack(value_t s)
 {
 	unsigned i;
+	struct array *a = as_ref(s);
 
 	printf("\n--- Data stack:\n");
-	for (i = 0; i < s->nr_entries; i++) {
-		print_value(stdout, s->values[i]);
+	for (i = 0; i < a->nr_elts; i++) {
+		print_value(stdout, array_get(a, i));
 		printf("\n");
 	}
 }
@@ -677,7 +651,7 @@ static int repl(struct vm *vm)
 		input.b = buffer;
 		input.e = buffer + strlen(buffer);
 		eval(vm, _read(vm, &input));
-		print_stack(&vm->k->stack);
+		print_stack(vm->k->stack);
 	}
 
 	return 0;

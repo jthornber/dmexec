@@ -48,12 +48,9 @@ static struct header *obj_to_header(void *obj)
 	return ((struct header *) obj) - 1;
 }
 
-void *as_ref(value_t v)
+static void *follow_fwd_ptrs(void *obj)
 {
-	void *obj = v.ptr;
 	struct header *h = obj_to_header(obj);
-
-	assert(get_tag(v) == TAG_REF);
 
 	while (h->type == FORWARD) {
 		obj = *((void **) (h + 1));
@@ -63,11 +60,41 @@ void *as_ref(value_t v)
 	return obj;
 }
 
+void *clone(void *obj_)
+{
+	void *obj = follow_fwd_ptrs(obj_);
+	struct header *h = obj_to_header(obj);
+	void *new = alloc(h->type, h->size);
+
+	memcpy(new, obj, h->size);
+	return new;
+}
+
+void *as_ref(value_t v)
+{
+	void *obj = v.ptr;
+	assert(get_tag(v) == TAG_REF);
+	return follow_fwd_ptrs(obj);
+}
+
 void replace_obj(void *old_obj, void *new_obj)
 {
-	set_type(old_obj, FORWARD);
+	set_obj_type(old_obj, FORWARD);
 	*((void **) old_obj) = new_obj;
 }
+
+void set_obj_type(void *obj, enum object_type t)
+{
+	struct header *h = obj_to_header(obj);
+	h->type = t;
+}
+
+enum object_type get_obj_type(void *obj)
+{
+	return obj_to_header(obj)->type;
+}
+
+//----------------------------------------------------------------
 
 struct header *get_header(value_t v)
 {
@@ -78,19 +105,11 @@ struct header *get_header(value_t v)
 
 enum object_type get_type(value_t v)
 {
-	struct header *h;
 
 	if (get_tag(v) == TAG_FIXNUM)
 		return FIXNUM;
 
-	h = get_header(v);
-	return h->type;
-}
-
-void set_type(void *obj, enum object_type t)
-{
-	struct header *h = obj_to_header(obj);
-	h->type = t;
+	return get_obj_type(as_ref(v));
 }
 
 //----------------------------------------------------------------

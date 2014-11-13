@@ -29,6 +29,24 @@ struct header {
 };
 
 void *alloc(enum object_type type, size_t s);
+void *zalloc(enum object_type type, size_t s);
+void *clone(void *obj);
+void replace_obj(void *old_obj, void *new_obj);
+
+void set_obj_type(void *obj, enum object_type t);
+enum object_type get_obj_type(void *obj);
+
+struct memory_stats {
+	size_t total_allocated;
+	size_t total_collected;
+	size_t current_allocated;
+	size_t max_allocated;
+	unsigned nr_gcs;
+};
+
+struct memory_stats *get_memory_stats();
+
+//----------------------------------------------------------------
 
 enum tag {
 	TAG_REF = 0,
@@ -41,12 +59,7 @@ typedef union value {
 	int32_t i;
 } value_t;
 
-void *alloc(enum object_type type, size_t s);
-void *zalloc(enum object_type type, size_t s);
-
-void set_type(void *obj, enum object_type t);
 value_t mk_ref(void *ptr);
-void replace_obj(void *old_obj, void *new_obj);
 
 // functions that take a value_t automatically chase forward ptrs.
 void *as_ref(value_t v);
@@ -55,16 +68,6 @@ enum object_type get_type(value_t v);
 
 enum tag get_tag(value_t v);
 value_t mk_false();
-
-struct memory_stats {
-	size_t total_allocated;
-	size_t total_collected;
-	size_t current_allocated;
-	size_t max_allocated;
-	unsigned nr_gcs;
-};
-
-struct memory_stats *get_memory_stats();
 
 //----------------------------------------------------------------
 

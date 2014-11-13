@@ -12,24 +12,11 @@
 
 /*----------------------------------------------------------------*/
 
-#define MAX_STACK 8192
-
-struct stack {
-	unsigned nr_entries;
-	value_t values[MAX_STACK];
-};
-
 struct code_position {
 	struct list_head list;
 	struct array *code;
 	unsigned position;
 };
-
-void init_stack(struct stack *s);
-void push(struct stack *s, value_t v);
-value_t peek(struct stack *s);
-value_t peekn(struct stack *s, unsigned n);
-value_t pop(struct stack *s);
 
 enum token_type {
 	TOK_FIXNUM,
@@ -50,7 +37,7 @@ struct token {
 };
 
 struct continuation {
-	struct stack stack;
+	value_t stack;
 	struct list_head call_stack;
 };
 
@@ -61,10 +48,10 @@ struct vm {
 
 typedef void (*prim_fn)(struct vm *);
 
-#define PUSH(v) push(&vm->k->stack, v)
-#define POP() pop(&vm->k->stack)
-#define PEEK() peek(&vm->k->stack)
-#define PEEKN(n) peekn(&vm->k->stack, n)
+#define PUSH(v) array_push(as_ref(vm->k->stack), v)
+#define POP() array_pop(as_ref(vm->k->stack))
+#define PEEK() array_peek(as_ref(vm->k->stack))
+#define PEEKN(n) array_peekn(as_ref(vm->k->stack), n)
 
 void push_call(struct vm *vm, struct array *code);
 void pop_call(struct vm *vm);
@@ -78,6 +65,10 @@ void print_value(FILE *stream, value_t v);
 unsigned as_fixnum(value_t v);
 value_t mk_fixnum(int i);
 bool is_false(value_t v);
+
+value_t mk_symbol(struct string *str);
+value_t mk_word(struct string *str);
+value_t mk_word_cstr(char *str);
 
 /*----------------------------------------------------------------*/
 

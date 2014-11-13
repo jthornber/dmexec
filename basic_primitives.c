@@ -9,7 +9,8 @@
  *--------------------------------------------------------------*/
 static void clear(struct vm *vm)
 {
-	vm->k->stack.nr_entries = 0;
+	struct array *s = as_ref(vm->k->stack);
+	s->nr_elts = 0;
 }
 
 static void call(struct vm *vm)
@@ -210,11 +211,23 @@ static void fixnum_div(struct vm *vm)
 	PUSH(mk_fixnum(as_fixnum(v2) / as_fixnum(v1)));
 }
 
+static void narray(struct vm *vm)
+{
+	int n = as_fixnum(POP());
+	struct array *a = array_create();
+
+	for (unsigned i = 0; i < n; i++)
+		a = array_push(a, POP());
+
+	array_reverse(a);
+	PUSH(mk_ref(a));
+}
+
 static void each(struct vm *vm)
 {
 	value_t q = POP();
 	value_t a = POP();
-	struct array *ary;
+	struct array *ary, *computation = quot_create();
 	unsigned i;
 
 	if (get_type(q) != QUOT) {
@@ -227,11 +240,44 @@ static void each(struct vm *vm)
 		exit(1);
 	}
 
+	// Build up a single quotation that does all the work
 	ary = as_ref(a);
 	for (i = 0; i < ary->nr_elts; i++) {
-		PUSH(array_get(ary, i));
-		push_call(vm, as_ref(q));
+		computation = array_push(computation, array_get(ary, i));
+		computation = array_concat(computation, as_ref(q));
 	}
+
+	push_call(vm, computation);
+}
+
+static void map(struct vm *vm)
+{
+	value_t q = POP();
+	value_t a = POP();
+	struct array *ary, *computation = quot_create();
+	unsigned i;
+
+	if (get_type(q) != QUOT) {
+		fprintf(stderr, "not a quotation\n");
+		exit(1);
+	}
+
+	if (get_type(a) != ARRAY) {
+		fprintf(stderr, "not an array\n");
+		exit(1);
+	}
+
+	// Build up a single quotation that does all the work
+	ary = as_ref(a);
+	for (i = 0; i < ary->nr_elts; i++) {
+		computation = array_push(computation, array_get(ary, i));
+		computation = array_concat(computation, as_ref(q));
+	}
+
+	computation = array_push(computation, mk_fixnum(ary->nr_elts));
+	computation = array_push(computation, mk_word_cstr("narray"));
+
+	push_call(vm, computation);
 }
 
 static void choice(struct vm *vm)
@@ -291,7 +337,9 @@ void def_basic_primitives(struct vm *vm)
 
 	def_primitive(vm, "?", choice);
 
+	def_primitive(vm, "narray", narray);
 	def_primitive(vm, "each", each);
+	def_primitive(vm, "map", map);
 
 	def_primitive(vm, "callcc0", callcc0);
 	def_primitive(vm, "continue", continue_cc);
