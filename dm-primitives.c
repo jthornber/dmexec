@@ -38,14 +38,12 @@ static int dm_ioctl(struct vm *vm, int request, void *payload)
 	int r, fd;
 
 	fd = open_control_file();
-	if (fd < 0) {
-		PUSH(mk_c_string("couldn't open dm control file"));
-		return fd;
-	}
+	if (fd < 0)
+		error("couldn't open dm control file");
 
-	r = ioctl(fd, DM_VERSION, payload);
+	r = ioctl(fd, request, payload);
 	if (r < 0)
-		PUSH(mk_c_string("ioctl call failed"));
+		error("ioctl call failed");
 
 	return r;
 }
