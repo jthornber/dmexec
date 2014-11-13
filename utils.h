@@ -5,6 +5,8 @@
 
 #define min(x, y) ((y) < (x) ? y : x)
 
+unsigned round_up(unsigned n, unsigned pow);
+
 //----------------------------------------------------------------
 
 #endif

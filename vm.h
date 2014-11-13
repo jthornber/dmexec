@@ -63,7 +63,7 @@ void def_primitive(struct vm *vm, char *k, prim_fn fn);
 void eval(struct vm *vm, struct array *code);
 value_t mk_quot();
 void print_value(FILE *stream, value_t v);
-unsigned as_fixnum(value_t v);
+
 value_t mk_fixnum(int i);
 bool is_false(value_t v);
 

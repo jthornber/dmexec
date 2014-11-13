@@ -155,6 +155,14 @@ bool is_false(value_t v)
 	return v.i == TAG_FALSE;
 }
 
+void *as_type(enum object_type t, value_t v)
+{
+	if (get_type(v) != t)
+		error("value not of correct type");
+
+	return as_ref(v);
+}
+
 //----------------------------------------------------------------
 
 struct memory_stats *get_memory_stats()

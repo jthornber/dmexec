@@ -25,6 +25,7 @@ SOURCE=\
 	mm.c \
 	namespace.c \
 	string_type.c \
+	utils.c \
 	vm.c \
 
 OBJECTS:=$(subst .c,.o,$(SOURCE))

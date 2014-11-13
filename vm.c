@@ -17,14 +17,6 @@
 #include "vm.h"
 
 //----------------------------------------------------------------
-// Math utils
-
-unsigned round_up(unsigned n, unsigned pow)
-{
-	return (n + (pow - 1)) & -pow;
-}
-
-//----------------------------------------------------------------
 // Words
 value_t mk_word_like(enum object_type type, struct string *str)
 {

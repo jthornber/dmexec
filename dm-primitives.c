@@ -6,8 +6,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "vm.h"
 #include "primitives.h"
+#include "string_type.h"
+#include "utils.h"
+#include "vm.h"
 
 /*----------------------------------------------------------------*/
 
@@ -33,7 +35,7 @@ static void init_ctl(struct dm_ioctl *ctl, size_t data_size)
 	ctl->data_start = sizeof(*ctl);
 }
 
-static int dm_ioctl(struct vm *vm, int request, void *payload)
+static void dm_ioctl(struct vm *vm, int request, void *payload)
 {
 	int r, fd;
 
@@ -44,8 +46,6 @@ static int dm_ioctl(struct vm *vm, int request, void *payload)
 	r = ioctl(fd, request, payload);
 	if (r < 0)
 		error("ioctl call failed");
-
-	return r;
 }
 
 static void dm_version(struct vm *vm)
@@ -54,8 +54,7 @@ static void dm_version(struct vm *vm)
 	struct dm_ioctl ctl;
 
 	init_ctl(&ctl, sizeof(ctl));
-	if (dm_ioctl(vm, DM_VERSION, &ctl) < 0)
-		return;
+	dm_ioctl(vm, DM_VERSION, &ctl);
 
 	snprintf(buffer, sizeof(buffer), "%u.%u.%u",
 		 ctl.version[0], ctl.version[1], ctl.version[2]);
@@ -67,10 +66,7 @@ static void dm_remove_all(struct vm *vm)
 	struct dm_ioctl ctl;
 
 	init_ctl(&ctl, sizeof(ctl));
-	if (dm_ioctl(vm, DM_REMOVE_ALL, &ctl) < 0)
-		return;
-
-	PUSH(mk_c_string("ok"));
+	dm_ioctl(vm, DM_REMOVE_ALL, &ctl);
 }
 
 static void dm_list_devices(struct vm *vm)
@@ -81,8 +77,7 @@ static void dm_list_devices(struct vm *vm)
 	value_t results = mk_ref(array_create());
 
 	init_ctl(ctl, sizeof(buffer));
-	if (dm_ioctl(vm, DM_LIST_DEVICES, ctl) < 0)
-		return;
+	dm_ioctl(vm, DM_LIST_DEVICES, ctl);
 
 	if (ctl->flags & DM_BUFFER_FULL_FLAG) {
 		PUSH(mk_c_string("buffer full flag set"));
@@ -107,6 +102,128 @@ static void dm_list_devices(struct vm *vm)
 	PUSH(results);
 }
 
+static void dm_create(struct vm *vm)
+{
+	struct dm_ioctl ctl;
+	value_t uuid_ = POP();
+	value_t name_ = POP();
+	struct string *name, *uuid;
+
+	init_ctl(&ctl, sizeof(ctl));
+
+	if (get_type(name_) != STRING)
+		error("<name> is not a string");
+	name = as_ref(name_);
+
+	if (get_type(uuid_) != STRING)
+		error("<uuid> is not a string");
+	uuid = as_ref(uuid_);
+
+	if (string_len(name) >= DM_NAME_LEN)
+		error("name too long");
+
+	if (string_len(uuid) >= DM_UUID_LEN)
+		error("uuid too long");
+
+	memcpy(ctl.name, name->b, string_len(name));
+	memcpy(ctl.uuid, uuid->b, string_len(uuid));
+
+	dm_ioctl(vm, DM_DEV_CREATE, &ctl);
+}
+
+static void dev_cmd(struct vm *vm, int request, unsigned flags)
+{
+	value_t name_ = POP();
+	struct dm_ioctl ctl;
+	struct string *name;
+
+	init_ctl(&ctl, sizeof(ctl));
+	ctl.flags = flags;
+
+	if (get_type(name_) != STRING)
+		error("<name> is not a string");
+	name = as_ref(name_);
+
+	if (string_len(name) >= DM_NAME_LEN)
+		error("name too long");
+
+	memcpy(ctl.name, name->b, string_len(name));
+	dm_ioctl(vm, request, &ctl);
+}
+
+static void dm_remove(struct vm *vm)
+{
+	dev_cmd(vm, DM_DEV_REMOVE, 0);
+}
+
+static void dm_suspend(struct vm *vm)
+{
+	dev_cmd(vm, DM_DEV_SUSPEND, DM_SUSPEND_FLAG);
+}
+
+static void dm_resume(struct vm *vm)
+{
+	dev_cmd(vm, DM_DEV_SUSPEND, 0);
+}
+
+static void dm_clear(struct vm *vm)
+{
+	dev_cmd(vm, DM_TABLE_CLEAR, 0);
+}
+
+static void dm_load(struct vm *vm)
+{
+	char buffer[8192];
+	struct string *name = as_type(STRING, POP());
+	struct array *table = as_type(ARRAY, POP());
+	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
+	struct dm_target_spec *spec;
+	uint64_t current_sector = 0;
+
+	init_ctl(ctl, sizeof(buffer));
+
+	if (string_len(name) >= DM_NAME_LEN)
+		error("name too long");
+	memcpy(ctl->name, name->b, string_len(name));
+
+	spec = (struct dm_target_spec *) (ctl + 1);
+
+	for (unsigned i = 0; i < table->nr_elts; i++) {
+		struct array *target = as_type(ARRAY, array_get(table, i));
+
+		if (target->nr_elts != 3)
+			error("<target> does not have 3 elements");
+
+		{
+			// Each entry in the table should have a fixnum length,
+			// followed by target type and target ctr string.  Start
+			// sectors are inferred.
+			int len = as_fixnum(array_get(target, 0));
+			struct string *tt = as_type(STRING, array_get(target, 1));
+			struct string *target_ctr = as_type(STRING, array_get(target, 2));
+
+			spec->sector_start = current_sector;
+			current_sector += len;
+			spec->length = len;
+			spec->status = 0;
+
+			if (string_len(tt) >= DM_MAX_TYPE_NAME)
+				error("target type name too long");
+			memcpy(spec->target_type, tt->b, string_len(tt));
+
+			memcpy(spec + 1, target_ctr->b, string_len(target_ctr));
+			((char *) (spec + 1))[string_len(target_ctr)] = '\0';
+
+			spec->next = sizeof(*spec) + round_up(string_len(target_ctr) + 1, 8);
+			spec = (struct dm_target_spec *) (((char *) spec) + spec->next);
+		}
+	}
+
+	// FIXME: no bounds checking
+
+	dm_ioctl(vm, DM_TABLE_LOAD, &ctl);
+}
+
 /*----------------------------------------------------------------*/
 
 void def_dm_primitives(struct vm *vm)
@@ -114,6 +231,12 @@ void def_dm_primitives(struct vm *vm)
 	def_primitive(vm, "dm-version", dm_version);
 	def_primitive(vm, "dm-remove-all", dm_remove_all);
 	def_primitive(vm, "dm-list-devices", dm_list_devices);
+	def_primitive(vm, "dm-create", dm_create);
+	def_primitive(vm, "dm-remove", dm_remove);
+	def_primitive(vm, "dm-suspend", dm_suspend);
+	def_primitive(vm, "dm-resume", dm_resume);
+	def_primitive(vm, "dm-clear", dm_clear);
+	def_primitive(vm, "dm-load", dm_load);
 }
 
 /*----------------------------------------------------------------*/
