@@ -246,6 +246,24 @@ static void dm_status(struct vm *vm)
 	status_cmd(vm, 0);
 }
 
+static void dm_message(struct vm *vm)
+{
+	char buffer[8192];
+	struct string *txt = as_type(STRING, POP());
+	int sector = as_fixnum(POP());
+	struct string *name = as_type(STRING, POP());
+	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
+	struct dm_target_msg *msg = (struct dm_target_msg *) (ctl + 1);
+
+	init_ctl(ctl, sizeof(buffer));
+	copy_param("name", ctl->name, DM_NAME_LEN, name);
+	msg->sector = sector;
+
+	// FIXME: bounds checking
+	memcpy(msg->message, txt->b, string_len(txt));
+	dm_ioctl(vm, DM_TARGET_MSG, ctl);
+}
+
 /*----------------------------------------------------------------*/
 
 void def_dm_primitives(struct vm *vm)
@@ -261,6 +279,7 @@ void def_dm_primitives(struct vm *vm)
 	def_primitive(vm, "dm-load", dm_load);
 	def_primitive(vm, "dm-table", dm_table);
 	def_primitive(vm, "dm-status", dm_status);
+	def_primitive(vm, "dm-message", dm_message);
 }
 
 /*----------------------------------------------------------------*/
