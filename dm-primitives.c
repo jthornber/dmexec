@@ -181,6 +181,7 @@ static void dm_load(struct vm *vm)
 	uint64_t current_sector = 0;
 
 	init_ctl(ctl, sizeof(buffer));
+	ctl->target_count = table->nr_elts;
 
 	if (string_len(name) >= DM_NAME_LEN)
 		error("name too long");
@@ -220,8 +221,7 @@ static void dm_load(struct vm *vm)
 	}
 
 	// FIXME: no bounds checking
-
-	dm_ioctl(vm, DM_TABLE_LOAD, &ctl);
+	dm_ioctl(vm, DM_TABLE_LOAD, ctl);
 }
 
 /*----------------------------------------------------------------*/
