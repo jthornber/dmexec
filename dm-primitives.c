@@ -102,52 +102,34 @@ static void dm_list_devices(struct vm *vm)
 	PUSH(results);
 }
 
+static void copy_param(const char *param, char *dest, size_t max, struct string *src)
+{
+	if (string_len(src) >= max)
+		error("<%s> string too long for param destination", param);
+
+	memcpy(dest, src->b, string_len(src));
+}
+
 static void dm_create(struct vm *vm)
 {
 	struct dm_ioctl ctl;
-	value_t uuid_ = POP();
-	value_t name_ = POP();
-	struct string *name, *uuid;
+	struct string *uuid = as_type(STRING, POP());
+	struct string *name = as_type(STRING, POP());
 
 	init_ctl(&ctl, sizeof(ctl));
-
-	if (get_type(name_) != STRING)
-		error("<name> is not a string");
-	name = as_ref(name_);
-
-	if (get_type(uuid_) != STRING)
-		error("<uuid> is not a string");
-	uuid = as_ref(uuid_);
-
-	if (string_len(name) >= DM_NAME_LEN)
-		error("name too long");
-
-	if (string_len(uuid) >= DM_UUID_LEN)
-		error("uuid too long");
-
-	memcpy(ctl.name, name->b, string_len(name));
-	memcpy(ctl.uuid, uuid->b, string_len(uuid));
-
+	copy_param("name", ctl.name, DM_NAME_LEN, name);
+	copy_param("uuid", ctl.uuid, DM_UUID_LEN, uuid);
 	dm_ioctl(vm, DM_DEV_CREATE, &ctl);
 }
 
 static void dev_cmd(struct vm *vm, int request, unsigned flags)
 {
-	value_t name_ = POP();
 	struct dm_ioctl ctl;
-	struct string *name;
+	struct string *name = as_type(STRING, POP());
 
 	init_ctl(&ctl, sizeof(ctl));
 	ctl.flags = flags;
-
-	if (get_type(name_) != STRING)
-		error("<name> is not a string");
-	name = as_ref(name_);
-
-	if (string_len(name) >= DM_NAME_LEN)
-		error("name too long");
-
-	memcpy(ctl.name, name->b, string_len(name));
+	copy_param("name", ctl.name, DM_NAME_LEN, name);
 	dm_ioctl(vm, request, &ctl);
 }
 
@@ -182,10 +164,7 @@ static void dm_load(struct vm *vm)
 
 	init_ctl(ctl, sizeof(buffer));
 	ctl->target_count = table->nr_elts;
-
-	if (string_len(name) >= DM_NAME_LEN)
-		error("name too long");
-	memcpy(ctl->name, name->b, string_len(name));
+	copy_param("name", ctl->name, DM_NAME_LEN, name);
 
 	spec = (struct dm_target_spec *) (ctl + 1);
 
@@ -208,10 +187,7 @@ static void dm_load(struct vm *vm)
 			spec->length = len;
 			spec->status = 0;
 
-			if (string_len(tt) >= DM_MAX_TYPE_NAME)
-				error("target type name too long");
-			memcpy(spec->target_type, tt->b, string_len(tt));
-
+			copy_param("target type", spec->target_type, DM_MAX_TYPE_NAME, tt);
 			memcpy(spec + 1, target_ctr->b, string_len(target_ctr));
 			((char *) (spec + 1))[string_len(target_ctr)] = '\0';
 
@@ -223,6 +199,8 @@ static void dm_load(struct vm *vm)
 	// FIXME: no bounds checking
 	dm_ioctl(vm, DM_TABLE_LOAD, ctl);
 }
+
+
 
 /*----------------------------------------------------------------*/
 
