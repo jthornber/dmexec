@@ -668,7 +668,15 @@ int main(int argc, char **argv)
 
 	load_file(&vm, "prelude.dm");
 
-	repl(&vm);
+	if (argc > 1) {
+		unsigned i;
+
+		for (i = 1; i < argc; i++)
+			load_file(&vm, argv[i]);
+
+	} else
+		repl(&vm);
+
 	printf("\n\ntotal allocated: %llu\n",
 	       (unsigned long long) get_memory_stats()->total_allocated);
 
