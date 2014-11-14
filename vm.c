@@ -475,13 +475,23 @@ struct string_source {
 
 static bool string_next_value(struct vm *vm, struct string_source *in, value_t *r);
 
+static bool is_word(char *target, value_t v)
+{
+	struct string *w;
+
+	if (get_type(v) != WORD)
+		return false;
+
+	w = as_ref(v);
+	return !string_cmp_cstr(w, target);
+}
+
 static bool syntax_quot(struct vm *vm, struct string_source *ss, value_t *r)
 {
 	value_t r2;
 
 	*r = mk_quot();
-	while (string_next_value(vm, ss, &r2) &&
-	       string_cmp_cstr(&ss->tok.str, "]"))
+	while (string_next_value(vm, ss, &r2) && !is_word("]", r2))
 		array_push(as_ref(*r), r2);
 
 	return true;
@@ -492,8 +502,7 @@ static bool syntax_array(struct vm *vm, struct string_source *ss, value_t *r)
 	value_t r2;
 
 	*r = mk_ref(array_create());
-	while (string_next_value(vm, ss, &r2) &&
-	       string_cmp_cstr(&ss->tok.str, "}"))
+	while (string_next_value(vm, ss, &r2) && !is_word("}", r2))
 		array_push(as_ref(*r), r2);
 
 	return true;
@@ -509,8 +518,7 @@ static void syntax_definition(struct vm *vm, struct string_source *ss)
 	}
 
 	body = mk_quot();
-	while (string_next_value(vm, ss, &v) &&
-	       string_cmp_cstr(&ss->tok.str, ";"))
+	while (string_next_value(vm, ss, &v) && !is_word(";", v))
 		array_push(as_ref(body), v);
 
 	def_word(vm, as_ref(w), as_ref(body));
