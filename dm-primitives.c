@@ -156,8 +156,8 @@ static void dm_clear(struct vm *vm)
 static void dm_load(struct vm *vm)
 {
 	char buffer[8192];
-	struct string *name = as_type(STRING, POP());
 	struct array *table = as_type(ARRAY, POP());
+	struct string *name = as_type(STRING, POP());
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
 	struct dm_target_spec *spec;
 	uint64_t current_sector = 0;
@@ -200,7 +200,51 @@ static void dm_load(struct vm *vm)
 	dm_ioctl(vm, DM_TABLE_LOAD, ctl);
 }
 
+static void status_cmd(struct vm *vm, unsigned flags)
+{
+	char buffer[8192];
+	struct string *name = as_type(STRING, POP());
+	struct array *table = array_create();
+	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
+	struct dm_target_spec *spec;
+	char *spec_start;
 
+	init_ctl(ctl, sizeof(buffer));
+	ctl->flags = flags;
+	ctl->target_count = 0;
+	copy_param("name", ctl->name, DM_NAME_LEN, name);
+
+	dm_ioctl(vm, DM_TABLE_STATUS, ctl);
+
+	if (ctl->flags & DM_BUFFER_FULL_FLAG)
+		error("dm-ioctl buffer too small");
+
+	spec = (struct dm_target_spec *) (ctl + 1);
+	spec_start = (char *) spec;
+	for (unsigned i = 0; i < ctl->target_count; i++) {
+		struct array *target = array_create();
+
+		array_push(target, mk_fixnum(spec->length));
+		array_push(target, mk_ref(string_clone_cstr(spec->target_type)));
+		array_push(target, mk_ref(string_clone_cstr((char *) (spec + 1))));
+
+		// FIXME: no bounds checking
+		spec = (struct dm_target_spec *) (spec_start + spec->next);
+		array_push(table, mk_ref(target));
+	}
+
+	PUSH(mk_ref(table));
+}
+
+static void dm_table(struct vm *vm)
+{
+	status_cmd(vm, DM_STATUS_TABLE_FLAG);
+}
+
+static void dm_status(struct vm *vm)
+{
+	status_cmd(vm, 0);
+}
 
 /*----------------------------------------------------------------*/
 
@@ -215,6 +259,8 @@ void def_dm_primitives(struct vm *vm)
 	def_primitive(vm, "dm-resume", dm_resume);
 	def_primitive(vm, "dm-clear", dm_clear);
 	def_primitive(vm, "dm-load", dm_load);
+	def_primitive(vm, "dm-table", dm_table);
+	def_primitive(vm, "dm-status", dm_status);
 }
 
 /*----------------------------------------------------------------*/
