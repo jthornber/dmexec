@@ -31,22 +31,13 @@ static void call(struct vm *vm)
 static void callcc0(struct vm *vm)
 {
 	value_t quot = POP();
-	struct code_position *cp, *new_cp;
 	struct continuation *k = alloc(CONTINUATION, sizeof(*k));
 
-	memcpy(&k->stack, &vm->k->stack, sizeof(k->stack));
-	INIT_LIST_HEAD(&k->call_stack);
-
-	list_for_each_entry (cp, &vm->k->call_stack, list) {
-		new_cp = alloc(CODE_POSITION, sizeof(*cp));
-		new_cp->code = cp->code;
-		new_cp->position = cp->position;
-		list_add_tail(&new_cp->list, &k->call_stack);
-	}
+	k->stack = clone_value(vm->k->stack);
+	k->call_stack = clone_value(vm->k->call_stack);
 
 	PUSH(mk_ref(k));
-	PUSH(quot);
-	call(vm);
+	push_call(vm, as_type(QUOT, quot));
 }
 
 static void continue_cc(struct vm *vm)

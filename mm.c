@@ -143,6 +143,11 @@ value_t mk_ref(void *ptr)
 	return v;
 }
 
+value_t clone_value(value_t v)
+{
+	return mk_ref(clone(as_ref(v)));
+}
+
 value_t mk_false()
 {
 	value_t v;

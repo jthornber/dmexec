@@ -327,7 +327,7 @@ struct dynamic_scope {
 static void init_continuation(struct continuation *k)
 {
 	k->stack = mk_ref(array_create());
-	INIT_LIST_HEAD(&k->call_stack);
+	k->call_stack = mk_ref(array_create());
 }
 
 static void init_vm(struct vm *vm)
@@ -358,19 +358,20 @@ void push_call(struct vm *vm, struct array *code)
 	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
 	pc->code = code;
 	pc->position = 0;
-	list_add(&pc->list, &vm->k->call_stack);
+	array_push(as_ref(vm->k->call_stack), mk_ref(pc));
 }
 
 void pop_call(struct vm *vm)
 {
-	struct code_position *pc = list_first_entry(&vm->k->call_stack, struct code_position, list);
-	list_del(&pc->list);
+	array_pop(as_ref(vm->k->call_stack));
 }
 
 static void inc_pc(struct vm *vm)
 {
-	if (!list_empty(&vm->k->call_stack)) {
-		struct code_position *pc = list_first_entry(&vm->k->call_stack, struct code_position, list);
+	struct array *s = as_ref(vm->k->call_stack);
+
+	if (s->nr_elts) {
+		struct code_position *pc = as_type(CODE_POSITION, array_peek(s));
 		if (++pc->position == pc->code->nr_elts)
 			pop_call(vm);
 	}
@@ -449,6 +450,12 @@ static void eval_value(struct vm *vm, value_t v)
 	}
 }
 
+static bool more_code(struct vm *vm)
+{
+	struct array *s = as_ref(vm->k->call_stack);
+	return s->nr_elts;
+}
+
 void eval(struct vm *vm, struct array *code)
 {
 	value_t v;
@@ -456,8 +463,9 @@ void eval(struct vm *vm, struct array *code)
 
 	if (code->nr_elts) {
 		push_call(vm, code);
-		while (!list_empty(&vm->k->call_stack)) {
-			pc = list_first_entry(&vm->k->call_stack, struct code_position, list);
+		while (more_code(vm)) {
+			struct array *s = as_ref(vm->k->call_stack);
+			pc = as_type(CODE_POSITION, array_peek(s));
 			v = array_get(pc->code, pc->position);
 			inc_pc(vm);
 			eval_value(vm, v);

@@ -60,6 +60,7 @@ typedef union value {
 } value_t;
 
 value_t mk_ref(void *ptr);
+value_t clone_value(value_t v);
 
 // functions that take a value_t automatically chase forward ptrs.
 void *as_ref(value_t v);

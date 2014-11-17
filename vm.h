@@ -38,8 +38,9 @@ struct token {
 };
 
 struct continuation {
+	// FIXME: why are these value_t's rather than bare arrays?
 	value_t stack;
-	struct list_head call_stack;
+	value_t call_stack;
 };
 
 struct vm {
