@@ -18,7 +18,10 @@ static struct memory_stats memory_stats_;
 
 static void out_of_memory()
 {
-	error("out of memory");
+	// FIXME
+//	error(vm, "out of memory");
+	fprintf(stderr, "out of memory\n");
+	exit(1);
 }
 
 void *alloc(enum object_type type, size_t s)
@@ -162,8 +165,11 @@ bool is_false(value_t v)
 
 void *as_type(enum object_type t, value_t v)
 {
-	if (get_type(v) != t)
-		error("value not of correct type");
+	if (get_type(v) != t) {
+		// FIXME: error("value not of correct type");
+		fprintf(stderr, "value not of correct type\n");
+		exit(1);
+	}
 
 	return as_ref(v);
 }

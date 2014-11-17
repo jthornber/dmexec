@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -104,26 +105,26 @@ static void print_string(FILE *stream, struct string *str)
 	fputc('\"', stream);
 }
 
-static void print_array_like(FILE *stream, struct array *a, char b, char e)
+static void print_array_like(struct vm *vm, FILE *stream, struct array *a, char b, char e)
 {
 	unsigned i;
 
 	fprintf(stream, "%c ", b);
 	for (i = 0; i < a->nr_elts; i++) {
-		print_value(stream, array_get(a, i));
+		print_value(vm, stream, array_get(a, i));
 		fprintf(stream, " ");
 	}
 	fprintf(stream, "%c", e);
 }
 
-static void print_array(FILE *stream, struct array *a)
+static void print_array(struct vm *vm, FILE *stream, struct array *a)
 {
-	print_array_like(stream, a, '{', '}');
+	print_array_like(vm, stream, a, '{', '}');
 }
 
-static void print_quot(FILE *stream, struct array *a)
+static void print_quot(struct vm *vm, FILE *stream, struct array *a)
 {
-	print_array_like(stream, a, '[', ']');
+	print_array_like(vm, stream, a, '[', ']');
 }
 
 #if 0
@@ -142,7 +143,7 @@ static void print_word(FILE *stream, struct string *w)
 		fputc(*ptr, stream);
 }
 
-void print_value(FILE *stream, value_t v)
+void print_value(struct vm *vm, FILE *stream, value_t v)
 {
 	struct header *h;
 
@@ -155,7 +156,7 @@ void print_value(FILE *stream, value_t v)
 		h = get_header(v);
 		switch (h->type) {
 		case FORWARD:
-			error("unexpected fwd ptr");
+			error(vm, "unexpected fwd ptr");
 			break;
 
 		case NAMESPACE:
@@ -188,11 +189,11 @@ void print_value(FILE *stream, value_t v)
 			break;
 
 		case QUOT:
-			print_quot(stream, (struct array *) v.ptr);
+			print_quot(vm, stream, (struct array *) v.ptr);
 			break;
 
 		case ARRAY:
-			print_array(stream, (struct array *) v.ptr);
+			print_array(vm, stream, (struct array *) v.ptr);
 			break;
 
 		case CODE_POSITION:
@@ -260,7 +261,7 @@ static bool scan_fixnum(struct string *in, struct token *result)
 	return true;
 }
 
-static bool scan_string(struct string *in, struct token *result)
+static bool scan_string(struct vm *vm, struct string *in, struct token *result)
 {
 	result->type = TOK_STRING;
 	step_input(in);
@@ -273,7 +274,7 @@ static bool scan_string(struct string *in, struct token *result)
 	result->str.e = in->b;
 
 	if (!more_input(in))
-		error("bad string");
+		error(vm, "bad string");
 
 	step_input(in);
 
@@ -292,7 +293,7 @@ static bool scan_word(struct string *in, struct token *result)
 	return true;
 }
 
-static bool scan(struct string *in, struct token *result)
+static bool scan(struct vm *vm, struct string *in, struct token *result)
 {
 	if (!more_input(in))
 		return false;
@@ -306,7 +307,7 @@ static bool scan(struct string *in, struct token *result)
 		return scan_fixnum(in, result);
 
 	else if (*in->b == '\"')
-		return scan_string(in, result);
+		return scan_string(vm, in, result);
 
 	else
 		return scan_word(in, result);
@@ -397,7 +398,7 @@ static void eval_value(struct vm *vm, value_t v)
 		h = get_header(v);
 		switch (h->type) {
 		case FORWARD:
-			error("unexpected fwd");
+			error(vm, "unexpected fwd");
 			break;
 
 		case NAMESPACE:
@@ -427,12 +428,12 @@ static void eval_value(struct vm *vm, value_t v)
 					break;
 
 				default:
-					error("bad def");
+					error(vm, "bad def");
 				}
 
 			} else {
 				// FIXME: add better error handling
-				error("couldn't lookup word");
+				error(vm, "couldn't lookup word");
 				//for (b = w->b; b != w->e; b++)
 				//	fprintf(stderr, "%c", *b);
 				//fprintf(stderr, "'\n");
@@ -440,11 +441,11 @@ static void eval_value(struct vm *vm, value_t v)
 			break;
 
 		case FIXNUM:
-			error("we shouldn't ever have non immediate fixnum objects");
+			error(vm, "we shouldn't ever have non immediate fixnum objects");
 			break;
 
 		case CODE_POSITION:
-			error("unexpected value");
+			error(vm, "unexpected value");
 			break;
 		}
 	}
@@ -461,15 +462,39 @@ void eval(struct vm *vm, struct array *code)
 	value_t v;
 	struct code_position *pc;
 
-	if (code->nr_elts) {
-		push_call(vm, code);
-		while (more_code(vm)) {
-			struct array *s = as_ref(vm->k->call_stack);
-			pc = as_type(CODE_POSITION, array_peek(s));
-			v = array_get(pc->code, pc->position);
-			inc_pc(vm);
-			eval_value(vm, v);
-		}
+	if (!code->nr_elts)
+		return;
+
+	push_call(vm, code);
+	setjmp(vm->eval_loop);
+
+	while (more_code(vm)) {
+		struct array *s = as_ref(vm->k->call_stack);
+		pc = as_type(CODE_POSITION, array_peek(s));
+		v = array_get(pc->code, pc->position);
+		inc_pc(vm);
+		eval_value(vm, v);
+	}
+}
+
+void error(struct vm *vm, const char *format, ...)
+{
+	va_list ap;
+
+	va_start(ap, format);
+	vfprintf(stderr, format, ap);
+	va_end(ap);
+
+	fprintf(stderr, "\n");
+
+	if (vm->exception_stack->nr_elts) {
+		fprintf(stderr, "jumping back to eval loop");
+		vm->k = as_ref(array_pop(vm->exception_stack));
+		longjmp(vm->eval_loop, -1);
+
+	} else {
+		fprintf(stderr, "no error handler, exiting\n");
+		exit(1);
 	}
 }
 
@@ -521,7 +546,7 @@ static void syntax_definition(struct vm *vm, struct string_source *ss)
 	value_t w, body, v;
 
 	if (!string_next_value(vm, ss, &w)) {
-		error("bad definition");
+		error(vm, "bad definition");
 		exit(1);
 	}
 
@@ -534,7 +559,7 @@ static void syntax_definition(struct vm *vm, struct string_source *ss)
 
 static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *r)
 {
-	if (!scan(&ss->in, &ss->tok))
+	if (!scan(vm, &ss->in, &ss->tok))
 		return false;
 
 	switch (ss->tok.type) {
@@ -599,15 +624,15 @@ static void load_file(struct vm *vm, const char *path)
 	struct array *code;
 
 	if (stat(path, &info) < 0)
-		error("couldn't stat '%s'\n", path);
+		error(vm, "couldn't stat '%s'\n", path);
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0)
-		error("couldn't open '%s'\n", path);
+		error(vm, "couldn't open '%s'\n", path);
 
 	input.b = mmap(NULL, info.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (!input.b)
-		error("couldn't mmap '%s'\n", path);
+		error(vm, "couldn't mmap '%s'\n", path);
 
 	input.e = input.b + info.st_size;
 
@@ -620,26 +645,14 @@ static void load_file(struct vm *vm, const char *path)
 //----------------------------------------------------------------
 // Top level
 
-void error(const char *format, ...)
-{
-	va_list ap;
-
-	va_start(ap, format);
-	vfprintf(stderr, format, ap);
-	va_end(ap);
-
-	fprintf(stderr, "\n");
-	exit(1);
-}
-
-static void print_stack(value_t s)
+static void print_stack(struct vm *vm, value_t s)
 {
 	unsigned i;
 	struct array *a = as_ref(s);
 
 	printf("\n--- Data stack:\n");
 	for (i = 0; i < a->nr_elts; i++) {
-		print_value(stdout, array_get(a, i));
+		print_value(vm, stdout, array_get(a, i));
 		printf("\n");
 	}
 }
@@ -660,7 +673,7 @@ static int repl(struct vm *vm)
 		input.b = buffer;
 		input.e = buffer + strlen(buffer);
 		eval(vm, _read(vm, &input));
-		print_stack(vm->k->stack);
+		print_stack(vm, vm->k->stack);
 	}
 
 	return 0;

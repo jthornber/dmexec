@@ -41,11 +41,11 @@ static void dm_ioctl(struct vm *vm, int request, void *payload)
 
 	fd = open_control_file();
 	if (fd < 0)
-		error("couldn't open dm control file");
+		error(vm, "couldn't open dm control file");
 
 	r = ioctl(fd, request, payload);
 	if (r < 0)
-		error("ioctl call failed");
+		error(vm, "ioctl call failed");
 }
 
 static void dm_version(struct vm *vm)
@@ -102,10 +102,10 @@ static void dm_list_devices(struct vm *vm)
 	PUSH(results);
 }
 
-static void copy_param(const char *param, char *dest, size_t max, struct string *src)
+static void copy_param(struct vm *vm, const char *param, char *dest, size_t max, struct string *src)
 {
 	if (string_len(src) >= max)
-		error("<%s> string too long for param destination", param);
+		error(vm, "<%s> string too long for param destination", param);
 
 	memcpy(dest, src->b, string_len(src));
 }
@@ -117,8 +117,8 @@ static void dm_create(struct vm *vm)
 	struct string *name = as_type(STRING, POP());
 
 	init_ctl(&ctl, sizeof(ctl));
-	copy_param("name", ctl.name, DM_NAME_LEN, name);
-	copy_param("uuid", ctl.uuid, DM_UUID_LEN, uuid);
+	copy_param(vm, "name", ctl.name, DM_NAME_LEN, name);
+	copy_param(vm, "uuid", ctl.uuid, DM_UUID_LEN, uuid);
 	dm_ioctl(vm, DM_DEV_CREATE, &ctl);
 }
 
@@ -129,7 +129,7 @@ static void dev_cmd(struct vm *vm, int request, unsigned flags)
 
 	init_ctl(&ctl, sizeof(ctl));
 	ctl.flags = flags;
-	copy_param("name", ctl.name, DM_NAME_LEN, name);
+	copy_param(vm, "name", ctl.name, DM_NAME_LEN, name);
 	dm_ioctl(vm, request, &ctl);
 }
 
@@ -164,7 +164,7 @@ static void dm_load(struct vm *vm)
 
 	init_ctl(ctl, sizeof(buffer));
 	ctl->target_count = table->nr_elts;
-	copy_param("name", ctl->name, DM_NAME_LEN, name);
+	copy_param(vm, "name", ctl->name, DM_NAME_LEN, name);
 
 	spec = (struct dm_target_spec *) (ctl + 1);
 
@@ -172,7 +172,7 @@ static void dm_load(struct vm *vm)
 		struct array *target = as_type(ARRAY, array_get(table, i));
 
 		if (target->nr_elts != 3)
-			error("<target> does not have 3 elements");
+			error(vm, "<target> does not have 3 elements");
 
 		{
 			// Each entry in the table should have a fixnum length,
@@ -187,7 +187,7 @@ static void dm_load(struct vm *vm)
 			spec->length = len;
 			spec->status = 0;
 
-			copy_param("target type", spec->target_type, DM_MAX_TYPE_NAME, tt);
+			copy_param(vm, "target type", spec->target_type, DM_MAX_TYPE_NAME, tt);
 			memcpy(spec + 1, target_ctr->b, string_len(target_ctr));
 			((char *) (spec + 1))[string_len(target_ctr)] = '\0';
 
@@ -212,12 +212,12 @@ static void status_cmd(struct vm *vm, unsigned flags)
 	init_ctl(ctl, sizeof(buffer));
 	ctl->flags = flags;
 	ctl->target_count = 0;
-	copy_param("name", ctl->name, DM_NAME_LEN, name);
+	copy_param(vm, "name", ctl->name, DM_NAME_LEN, name);
 
 	dm_ioctl(vm, DM_TABLE_STATUS, ctl);
 
 	if (ctl->flags & DM_BUFFER_FULL_FLAG)
-		error("dm-ioctl buffer too small");
+		error(vm, "dm-ioctl buffer too small");
 
 	spec = (struct dm_target_spec *) (ctl + 1);
 	spec_start = (char *) spec;
@@ -256,7 +256,7 @@ static void dm_message(struct vm *vm)
 	struct dm_target_msg *msg = (struct dm_target_msg *) (ctl + 1);
 
 	init_ctl(ctl, sizeof(buffer));
-	copy_param("name", ctl->name, DM_NAME_LEN, name);
+	copy_param(vm, "name", ctl->name, DM_NAME_LEN, name);
 	msg->sector = sector;
 
 	// FIXME: bounds checking

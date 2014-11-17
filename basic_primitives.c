@@ -23,7 +23,7 @@ static void call(struct vm *vm)
 		break;
 
 	default:
-		error("not a callable");
+		error(vm, "not a callable");
 		//print_value(stderr, callable);
 	}
 }
@@ -45,7 +45,7 @@ static void continue_cc(struct vm *vm)
 	value_t k = POP();
 
 	if (get_type(k) != CONTINUATION)
-		error("not a continuation");
+		error(vm, "not a continuation");
 
 	vm->k = as_ref(k);
 }
@@ -69,7 +69,7 @@ static void curry(struct vm *vm)
 static void dot(struct vm *vm)
 {
 	value_t v = POP();
-	print_value(stdout, v);
+	print_value(vm, stdout, v);
 	printf("\n");
 }
 
@@ -218,10 +218,10 @@ static void each(struct vm *vm)
 	unsigned i;
 
 	if (get_type(q) != QUOT)
-		error("not a quotation");
+		error(vm, "not a quotation");
 
 	if (get_type(a) != ARRAY)
-		error("not an array");
+		error(vm, "not an array");
 
 	// Build up a single quotation that does all the work
 	ary = as_ref(a);
@@ -241,10 +241,10 @@ static void map(struct vm *vm)
 	unsigned i;
 
 	if (get_type(q) != QUOT)
-		error("not a quotation");
+		error(vm, "not a quotation");
 
 	if (get_type(a) != ARRAY)
-		error("not an array");
+		error(vm, "not an array");
 
 	// Build up a single quotation that does all the work
 	ary = as_ref(a);
