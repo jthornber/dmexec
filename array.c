@@ -1,8 +1,8 @@
 #include "array.h"
 
+#include "error.h"
 #include "utils.h"
 
-#include <assert.h>
 #include <string.h>
 
 //----------------------------------------------------------------
@@ -44,15 +44,21 @@ struct array *array_resize(struct array *a, unsigned new_nr_alloc)
 	return new;
 }
 
+static void check_bounds(struct array *a, unsigned i)
+{
+	if (i >= a->nr_elts)
+		error("array index (%u) out of bounds (%u).", i , a->nr_elts);
+}
+
 value_t array_get(struct array *a, unsigned i)
 {
-	assert(i < a->nr_elts);	/* FIXME: throw */
+	check_bounds(a, i);
 	return *elt_ptr(a, i);
 }
 
 void array_set(struct array *a, unsigned i, value_t v)
 {
-	assert(i < a->nr_elts);	/* FIXME: throw */
+	check_bounds(a, i);
 	*elt_ptr(a, i) = v;
 }
 
@@ -71,7 +77,9 @@ value_t array_pop(struct array *a)
 {
 	value_t v;
 
-	assert(a->nr_elts);	/* FIXME: throw */
+	if (!a->nr_elts)
+		error("asked to pop an empty array.");
+
 	v = *elt_ptr(a, a->nr_elts - 1);
 	a->nr_elts--;
 	return v;
@@ -106,7 +114,9 @@ value_t array_shift(struct array *a)
 {
 	value_t v;
 
-	assert(a->nr_elts);
+	if (!a->nr_elts)
+		error("asked to shift an array with zero elements.");
+
 	v = *elt_ptr(a, 0);
 
 	a->nr_elts--;

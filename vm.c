@@ -461,6 +461,7 @@ struct vm *global_vm = NULL;
 
 void eval(struct vm *vm, struct array *code)
 {
+	int r;
 	value_t v;
 	struct code_position *pc;
 
@@ -468,7 +469,10 @@ void eval(struct vm *vm, struct array *code)
 		return;
 
 	push_call(code);
-	setjmp(vm->eval_loop);
+	do
+		r = setjmp(vm->eval_loop);
+	while (r);
+	vm->handling_error = false;
 
 	while (more_code(vm)) {
 		struct array *s = as_ref(vm->k->call_stack);
@@ -489,15 +493,26 @@ void error(const char *format, ...)
 
 	fprintf(stderr, "\n");
 
+	if (global_vm->handling_error) {
+		fprintf(stderr, "error whilst handling error, aborting");
+		abort();
+	}
+
+#if 1
+	longjmp(global_vm->eval_loop, 1);
+#else
 	if (global_vm->exception_stack->nr_elts) {
+		global_vm->handling_error = true;
 		fprintf(stderr, "jumping back to eval loop");
 		global_vm->k = as_ref(array_pop(global_vm->exception_stack));
 		longjmp(global_vm->eval_loop, -1);
 
 	} else {
+		// This shouldn't happen
 		fprintf(stderr, "no error handler, exiting\n");
 		exit(1);
 	}
+#endif
 }
 
 //----------------------------------------------------------------

@@ -49,6 +49,7 @@ struct vm {
 	struct continuation *k;
 
 	jmp_buf eval_loop;
+	bool handling_error;	// FIXME: is this needed?
 	struct array *exception_stack;
 };
 
