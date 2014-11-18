@@ -467,6 +467,9 @@ void eval(struct vm *vm, struct array *code)
 	if (!code->nr_elts)
 		return;
 
+	// FIXME: we need to push a continuation on the exception stack at
+	// this point.  ie. before the code gets pushed.
+
 	push_call(code);
 	do
 		r = setjmp(vm->eval_loop);
