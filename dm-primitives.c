@@ -87,7 +87,6 @@ static void dm_list_devices()
 	nl = (struct dm_name_list *) ((void *) ctl + ctl->data_start);
 	if (nl->dev) {
 		while (true) {
-			fprintf(stderr, nl->name);
 			array_push(as_ref(results), mk_c_string(nl->name));
 
 			if (!nl->next)
@@ -95,8 +94,6 @@ static void dm_list_devices()
 
 			nl = (struct dm_name_list*) (((char *) nl) + nl->next);
 		}
-	} else {
-		fprintf(stderr, "nl->dev = 0, name = %s\n", nl->name);
 	}
 
 	PUSH(results);

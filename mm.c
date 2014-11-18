@@ -1,6 +1,5 @@
 #include "mm.h"
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,10 +17,7 @@ static struct memory_stats memory_stats_;
 
 static void out_of_memory()
 {
-	// FIXME
-//	error(vm, "out of memory");
-	fprintf(stderr, "out of memory\n");
-	exit(1);
+	error("out of memory");
 }
 
 void *alloc(enum object_type type, size_t s)
@@ -77,7 +73,8 @@ void *clone(void *obj_)
 void *as_ref(value_t v)
 {
 	void *obj = v.ptr;
-	assert(get_tag(v) == TAG_REF);
+	if (get_tag(v) != TAG_REF)
+		error("type error: value is not a reference.");
 	return follow_fwd_ptrs(obj);
 }
 
@@ -103,7 +100,10 @@ enum object_type get_obj_type(void *obj)
 struct header *get_header(value_t v)
 {
 	struct header *h = obj_to_header(as_ref(v));
-	assert(h->magic == HEADER_MAGIC);
+	if (h->magic != HEADER_MAGIC) {
+		fprintf(stderr, "memory corruption detected.");
+		abort();
+	}
 	return h;
 };
 
@@ -135,7 +135,8 @@ value_t mk_fixnum(int i)
 
 unsigned as_fixnum(value_t v)
 {
-	assert(get_tag(v) == TAG_FIXNUM);
+	if (get_tag(v) != TAG_FIXNUM)
+		error("type error: expected fixnum.");
 	return v.i >> 2;
 }
 
@@ -165,11 +166,8 @@ bool is_false(value_t v)
 
 void *as_type(enum object_type t, value_t v)
 {
-	if (get_type(v) != t) {
-		// FIXME: error("value not of correct type");
-		fprintf(stderr, "value not of correct type\n");
-		exit(1);
-	}
+	if (get_type(v) != t)
+		error("type error: expected type %d.", t);
 
 	return as_ref(v);
 }

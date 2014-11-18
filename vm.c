@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <ctype.h>
 #include <fcntl.h>
 #include <setjmp.h>
@@ -613,8 +612,7 @@ static bool string_next_value(struct string_source *ss, value_t *r)
 		break;
 
 	default:
-		assert(!"implemented");
-		exit(1);
+		error("unhandled token type: %d.", ss->tok.type);
 	}
 
 	return true;
@@ -700,6 +698,7 @@ static int repl(struct vm *vm)
 
 int main(int argc, char **argv)
 {
+	unsigned i;
 	struct vm vm;
 
 	init_vm(&vm);
@@ -708,13 +707,10 @@ int main(int argc, char **argv)
 
 	load_file(&vm, "prelude.dm");
 
-	if (argc > 1) {
-		unsigned i;
-
+	if (argc > 1)
 		for (i = 1; i < argc; i++)
 			load_file(&vm, argv[i]);
-
-	} else
+	else
 		repl(&vm);
 
 	printf("\n\ntotal allocated: %llu\n",
