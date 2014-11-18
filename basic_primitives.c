@@ -7,50 +7,50 @@
 /*----------------------------------------------------------------
  * Primitives
  *--------------------------------------------------------------*/
-static void clear(struct vm *vm)
+static void clear()
 {
-	struct array *s = as_ref(vm->k->stack);
+	struct array *s = as_ref(global_vm->k->stack);
 	s->nr_elts = 0;
 }
 
-static void call(struct vm *vm)
+static void call()
 {
 	value_t callable = POP();
 
 	switch (get_type(callable)) {
 	case QUOT:
-		push_call(vm, as_ref(callable));
+		push_call(as_ref(callable));
 		break;
 
 	default:
-		error(vm, "not a callable");
+		error("not a callable");
 		//print_value(stderr, callable);
 	}
 }
 
-static void callcc0(struct vm *vm)
+static void callcc0()
 {
 	value_t quot = POP();
 	struct continuation *k = alloc(CONTINUATION, sizeof(*k));
 
-	k->stack = clone_value(vm->k->stack);
-	k->call_stack = clone_value(vm->k->call_stack);
+	k->stack = clone_value(global_vm->k->stack);
+	k->call_stack = clone_value(global_vm->k->call_stack);
 
 	PUSH(mk_ref(k));
-	push_call(vm, as_type(QUOT, quot));
+	push_call(as_type(QUOT, quot));
 }
 
-static void continue_cc(struct vm *vm)
+static void continue_cc()
 {
 	value_t k = POP();
 
 	if (get_type(k) != CONTINUATION)
-		error(vm, "not a continuation");
+		error("not a continuation");
 
-	vm->k = as_ref(k);
+	global_vm->k = as_ref(k);
 }
 
-static void curry(struct vm *vm)
+static void curry()
 {
 	value_t q = POP();
 	value_t obj = POP();
@@ -66,14 +66,14 @@ static void curry(struct vm *vm)
 	PUSH(mk_ref(new_q));
 }
 
-static void dot(struct vm *vm)
+static void dot()
 {
 	value_t v = POP();
-	print_value(vm, stdout, v);
+	print_value(stdout, v);
 	printf("\n");
 }
 
-static void ndrop(struct vm *vm)
+static void ndrop()
 {
 	unsigned i;
 	value_t v = POP();
@@ -82,7 +82,7 @@ static void ndrop(struct vm *vm)
 		POP();
 }
 
-static void nnip(struct vm *vm)
+static void nnip()
 {
 	unsigned i;
 	value_t v = POP();
@@ -94,13 +94,13 @@ static void nnip(struct vm *vm)
 	PUSH(restore);
 }
 
-static void _dup(struct vm *vm)
+static void _dup()
 {
 	value_t v = PEEK();
 	PUSH(v);
 }
 
-static void _dup2(struct vm *vm)
+static void _dup2()
 {
 	value_t y = PEEK();
 	value_t x = PEEKN(1);
@@ -108,7 +108,7 @@ static void _dup2(struct vm *vm)
 	PUSH(y);
 }
 
-static void _dup3(struct vm *vm)
+static void _dup3()
 {
 	value_t z = PEEK();
 	value_t y = PEEKN(1);
@@ -119,23 +119,23 @@ static void _dup3(struct vm *vm)
 	PUSH(z);
 }
 
-static void over(struct vm *vm)
+static void over()
 {
 	PUSH(PEEKN(1));
 }
 
-static void over2(struct vm *vm)
+static void over2()
 {
 	PUSH(PEEKN(2));
 	PUSH(PEEKN(2));
 }
 
-static void pick(struct vm *vm)
+static void pick()
 {
 	PUSH(PEEKN(2));
 }
 
-static void swap(struct vm *vm)
+static void swap()
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -143,7 +143,7 @@ static void swap(struct vm *vm)
 	PUSH(v2);
 }
 
-static void dip(struct vm *vm)
+static void dip()
 {
 #if 1
 	// bi only works with this branch
@@ -152,10 +152,10 @@ static void dip(struct vm *vm)
 
 	value_t after = mk_quot();
 	array_push(as_ref(after), x);
-	push_call(vm, as_ref(after));
+	push_call(as_ref(after));
 
 	PUSH(q);
-	call(vm);
+	call();
 #else
 	value_t q = POP();
 	value_t x = POP();
@@ -166,7 +166,7 @@ static void dip(struct vm *vm)
 #endif
 }
 
-static void fixnum_add(struct vm *vm)
+static void fixnum_add()
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -174,7 +174,7 @@ static void fixnum_add(struct vm *vm)
 	PUSH(mk_fixnum(as_fixnum(v1) + as_fixnum(v2)));
 }
 
-static void fixnum_sub(struct vm *vm)
+static void fixnum_sub()
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -182,7 +182,7 @@ static void fixnum_sub(struct vm *vm)
 	PUSH(mk_fixnum(as_fixnum(v2) - as_fixnum(v1)));
 }
 
-static void fixnum_mult(struct vm *vm)
+static void fixnum_mult()
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -190,7 +190,7 @@ static void fixnum_mult(struct vm *vm)
 	PUSH(mk_fixnum(as_fixnum(v2) * as_fixnum(v1)));
 }
 
-static void fixnum_div(struct vm *vm)
+static void fixnum_div()
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -198,7 +198,7 @@ static void fixnum_div(struct vm *vm)
 	PUSH(mk_fixnum(as_fixnum(v2) / as_fixnum(v1)));
 }
 
-static void narray(struct vm *vm)
+static void narray()
 {
 	int n = as_fixnum(POP());
 	struct array *a = array_create();
@@ -210,7 +210,7 @@ static void narray(struct vm *vm)
 	PUSH(mk_ref(a));
 }
 
-static void each(struct vm *vm)
+static void each()
 {
 	value_t q = POP();
 	value_t a = POP();
@@ -218,10 +218,10 @@ static void each(struct vm *vm)
 	unsigned i;
 
 	if (get_type(q) != QUOT)
-		error(vm, "not a quotation");
+		error("not a quotation");
 
 	if (get_type(a) != ARRAY)
-		error(vm, "not an array");
+		error("not an array");
 
 	// Build up a single quotation that does all the work
 	ary = as_ref(a);
@@ -230,10 +230,10 @@ static void each(struct vm *vm)
 		computation = array_concat(computation, as_ref(q));
 	}
 
-	push_call(vm, computation);
+	push_call(computation);
 }
 
-static void map(struct vm *vm)
+static void map()
 {
 	value_t q = POP();
 	value_t a = POP();
@@ -241,10 +241,10 @@ static void map(struct vm *vm)
 	unsigned i;
 
 	if (get_type(q) != QUOT)
-		error(vm, "not a quotation");
+		error("not a quotation");
 
 	if (get_type(a) != ARRAY)
-		error(vm, "not an array");
+		error("not an array");
 
 	// Build up a single quotation that does all the work
 	ary = as_ref(a);
@@ -256,10 +256,10 @@ static void map(struct vm *vm)
 	computation = array_push(computation, mk_fixnum(ary->nr_elts));
 	computation = array_push(computation, mk_word_cstr("narray"));
 
-	push_call(vm, computation);
+	push_call(computation);
 }
 
-static void choice(struct vm *vm)
+static void choice()
 {
 	value_t f = POP();
 	value_t t = POP();
@@ -271,7 +271,7 @@ static void choice(struct vm *vm)
 		PUSH(t);
 }
 
-static void mk_tuple(struct vm *vm)
+static void mk_tuple()
 {
 	unsigned i;
 	value_t name = POP();

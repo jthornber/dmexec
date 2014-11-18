@@ -4,7 +4,7 @@
 //----------------------------------------------------------------
 
 struct vm;
-void error(struct vm *vm, const char *format, ...) __attribute__ ((format (printf, 2, 3)));
+void error(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 
 //----------------------------------------------------------------
 

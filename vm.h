@@ -52,22 +52,28 @@ struct vm {
 	struct array *exception_stack;
 };
 
-typedef void (*prim_fn)(struct vm *);
+// Rather than constantly pass the single vm instance around I'm going to
+// use a global.  Supporting error recovery meant the vm would have to be
+// passed into practically every function eg. array_pop().  This global is
+// set during evaluation, it is _not_ set when defining primitives.
+extern struct vm *global_vm;
 
-#define PUSH(v) array_push(as_ref(vm->k->stack), v)
-#define POP() array_pop(as_ref(vm->k->stack))
-#define PEEK() array_peek(as_ref(vm->k->stack))
-#define PEEKN(n) array_peekn(as_ref(vm->k->stack), n)
+typedef void (*prim_fn)(void);
 
-void push_call(struct vm *vm, struct array *code);
-void pop_call(struct vm *vm);
+#define PUSH(v) array_push(as_ref(global_vm->k->stack), v)
+#define POP() array_pop(as_ref(global_vm->k->stack))
+#define PEEK() array_peek(as_ref(global_vm->k->stack))
+#define PEEKN(n) array_peekn(as_ref(global_vm->k->stack), n)
+
+void push_call(struct array *code);
+void pop_call();
 
 value_t mk_string(const char *b, const char *e);
 void def_primitive(struct vm *vm, char *k, prim_fn fn);
 
 void eval(struct vm *vm, struct array *code);
 value_t mk_quot();
-void print_value(struct vm *vm, FILE *stream, value_t v);
+void print_value(FILE *stream, value_t v);
 
 value_t mk_fixnum(int i);
 bool is_false(value_t v);

@@ -105,26 +105,26 @@ static void print_string(FILE *stream, struct string *str)
 	fputc('\"', stream);
 }
 
-static void print_array_like(struct vm *vm, FILE *stream, struct array *a, char b, char e)
+static void print_array_like(FILE *stream, struct array *a, char b, char e)
 {
 	unsigned i;
 
 	fprintf(stream, "%c ", b);
 	for (i = 0; i < a->nr_elts; i++) {
-		print_value(vm, stream, array_get(a, i));
+		print_value(stream, array_get(a, i));
 		fprintf(stream, " ");
 	}
 	fprintf(stream, "%c", e);
 }
 
-static void print_array(struct vm *vm, FILE *stream, struct array *a)
+static void print_array(FILE *stream, struct array *a)
 {
-	print_array_like(vm, stream, a, '{', '}');
+	print_array_like(stream, a, '{', '}');
 }
 
-static void print_quot(struct vm *vm, FILE *stream, struct array *a)
+static void print_quot(FILE *stream, struct array *a)
 {
-	print_array_like(vm, stream, a, '[', ']');
+	print_array_like(stream, a, '[', ']');
 }
 
 #if 0
@@ -143,7 +143,7 @@ static void print_word(FILE *stream, struct string *w)
 		fputc(*ptr, stream);
 }
 
-void print_value(struct vm *vm, FILE *stream, value_t v)
+void print_value(FILE *stream, value_t v)
 {
 	struct header *h;
 
@@ -156,7 +156,7 @@ void print_value(struct vm *vm, FILE *stream, value_t v)
 		h = get_header(v);
 		switch (h->type) {
 		case FORWARD:
-			error(vm, "unexpected fwd ptr");
+			error("unexpected fwd ptr");
 			break;
 
 		case NAMESPACE:
@@ -189,11 +189,11 @@ void print_value(struct vm *vm, FILE *stream, value_t v)
 			break;
 
 		case QUOT:
-			print_quot(vm, stream, (struct array *) v.ptr);
+			print_quot(stream, (struct array *) v.ptr);
 			break;
 
 		case ARRAY:
-			print_array(vm, stream, (struct array *) v.ptr);
+			print_array(stream, (struct array *) v.ptr);
 			break;
 
 		case CODE_POSITION:
@@ -261,7 +261,7 @@ static bool scan_fixnum(struct string *in, struct token *result)
 	return true;
 }
 
-static bool scan_string(struct vm *vm, struct string *in, struct token *result)
+static bool scan_string(struct string *in, struct token *result)
 {
 	result->type = TOK_STRING;
 	step_input(in);
@@ -274,7 +274,7 @@ static bool scan_string(struct vm *vm, struct string *in, struct token *result)
 	result->str.e = in->b;
 
 	if (!more_input(in))
-		error(vm, "bad string");
+		error("bad string");
 
 	step_input(in);
 
@@ -293,7 +293,7 @@ static bool scan_word(struct string *in, struct token *result)
 	return true;
 }
 
-static bool scan(struct vm *vm, struct string *in, struct token *result)
+static bool scan(struct string *in, struct token *result)
 {
 	if (!more_input(in))
 		return false;
@@ -307,7 +307,7 @@ static bool scan(struct vm *vm, struct string *in, struct token *result)
 		return scan_fixnum(in, result);
 
 	else if (*in->b == '\"')
-		return scan_string(vm, in, result);
+		return scan_string(in, result);
 
 	else
 		return scan_word(in, result);
@@ -349,36 +349,36 @@ void def_primitive(struct vm *vm, char *name, prim_fn fn)
 	namespace_insert(vm->current_ns, &k, mk_ref(p));
 }
 
-static void def_word(struct vm *vm, struct string *w, struct array *body)
+static void def_word(struct string *w, struct array *body)
 {
-	namespace_insert(vm->current_ns, w, mk_ref(body));
+	namespace_insert(global_vm->current_ns, w, mk_ref(body));
 }
 
-void push_call(struct vm *vm, struct array *code)
+void push_call(struct array *code)
 {
 	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
 	pc->code = code;
 	pc->position = 0;
-	array_push(as_ref(vm->k->call_stack), mk_ref(pc));
+	array_push(as_ref(global_vm->k->call_stack), mk_ref(pc));
 }
 
-void pop_call(struct vm *vm)
+void pop_call()
 {
-	array_pop(as_ref(vm->k->call_stack));
+	array_pop(as_ref(global_vm->k->call_stack));
 }
 
-static void inc_pc(struct vm *vm)
+static void inc_pc()
 {
-	struct array *s = as_ref(vm->k->call_stack);
+	struct array *s = as_ref(global_vm->k->call_stack);
 
 	if (s->nr_elts) {
 		struct code_position *pc = as_type(CODE_POSITION, array_peek(s));
 		if (++pc->position == pc->code->nr_elts)
-			pop_call(vm);
+			pop_call();
 	}
 }
 
-static void eval_value(struct vm *vm, value_t v)
+static void eval_value(value_t v)
 {
 	struct primitive *p;
 	struct string *w;
@@ -398,7 +398,7 @@ static void eval_value(struct vm *vm, value_t v)
 		h = get_header(v);
 		switch (h->type) {
 		case FORWARD:
-			error(vm, "unexpected fwd");
+			error("unexpected fwd");
 			break;
 
 		case NAMESPACE:
@@ -416,24 +416,24 @@ static void eval_value(struct vm *vm, value_t v)
 
 		case WORD:
 			w = as_ref(v);
-			if (namespace_lookup(vm->current_ns, w, &def)) {
+			if (namespace_lookup(global_vm->current_ns, w, &def)) {
 				switch (get_type(def)) {
 				case PRIMITIVE:
 					p = as_ref(def);
-					p->fn(vm);
+					p->fn();
 					break;
 
 				case QUOT:
-					push_call(vm, as_ref(def));
+					push_call(as_ref(def));
 					break;
 
 				default:
-					error(vm, "bad def");
+					error("bad def");
 				}
 
 			} else {
 				// FIXME: add better error handling
-				error(vm, "couldn't lookup word");
+				error("couldn't lookup word");
 				//for (b = w->b; b != w->e; b++)
 				//	fprintf(stderr, "%c", *b);
 				//fprintf(stderr, "'\n");
@@ -441,21 +441,23 @@ static void eval_value(struct vm *vm, value_t v)
 			break;
 
 		case FIXNUM:
-			error(vm, "we shouldn't ever have non immediate fixnum objects");
+			error("we shouldn't ever have non immediate fixnum objects");
 			break;
 
 		case CODE_POSITION:
-			error(vm, "unexpected value");
+			error("unexpected value");
 			break;
 		}
 	}
 }
 
-static bool more_code(struct vm *vm)
+static bool more_code()
 {
-	struct array *s = as_ref(vm->k->call_stack);
+	struct array *s = as_ref(global_vm->k->call_stack);
 	return s->nr_elts;
 }
+
+struct vm *global_vm = NULL;
 
 void eval(struct vm *vm, struct array *code)
 {
@@ -465,7 +467,7 @@ void eval(struct vm *vm, struct array *code)
 	if (!code->nr_elts)
 		return;
 
-	push_call(vm, code);
+	push_call(code);
 	setjmp(vm->eval_loop);
 
 	while (more_code(vm)) {
@@ -473,11 +475,11 @@ void eval(struct vm *vm, struct array *code)
 		pc = as_type(CODE_POSITION, array_peek(s));
 		v = array_get(pc->code, pc->position);
 		inc_pc(vm);
-		eval_value(vm, v);
+		eval_value(v);
 	}
 }
 
-void error(struct vm *vm, const char *format, ...)
+void error(const char *format, ...)
 {
 	va_list ap;
 
@@ -487,10 +489,10 @@ void error(struct vm *vm, const char *format, ...)
 
 	fprintf(stderr, "\n");
 
-	if (vm->exception_stack->nr_elts) {
+	if (global_vm->exception_stack->nr_elts) {
 		fprintf(stderr, "jumping back to eval loop");
-		vm->k = as_ref(array_pop(vm->exception_stack));
-		longjmp(vm->eval_loop, -1);
+		global_vm->k = as_ref(array_pop(global_vm->exception_stack));
+		longjmp(global_vm->eval_loop, -1);
 
 	} else {
 		fprintf(stderr, "no error handler, exiting\n");
@@ -506,7 +508,7 @@ struct string_source {
 	struct token tok;
 };
 
-static bool string_next_value(struct vm *vm, struct string_source *in, value_t *r);
+static bool string_next_value(struct string_source *in, value_t *r);
 
 static bool is_word(char *target, value_t v)
 {
@@ -519,47 +521,47 @@ static bool is_word(char *target, value_t v)
 	return !string_cmp_cstr(w, target);
 }
 
-static bool syntax_quot(struct vm *vm, struct string_source *ss, value_t *r)
+static bool syntax_quot(struct string_source *ss, value_t *r)
 {
 	value_t r2;
 
 	*r = mk_quot();
-	while (string_next_value(vm, ss, &r2) && !is_word("]", r2))
+	while (string_next_value(ss, &r2) && !is_word("]", r2))
 		array_push(as_ref(*r), r2);
 
 	return true;
 }
 
-static bool syntax_array(struct vm *vm, struct string_source *ss, value_t *r)
+static bool syntax_array(struct string_source *ss, value_t *r)
 {
 	value_t r2;
 
 	*r = mk_ref(array_create());
-	while (string_next_value(vm, ss, &r2) && !is_word("}", r2))
+	while (string_next_value(ss, &r2) && !is_word("}", r2))
 		array_push(as_ref(*r), r2);
 
 	return true;
 }
 
-static void syntax_definition(struct vm *vm, struct string_source *ss)
+static void syntax_definition(struct string_source *ss)
 {
 	value_t w, body, v;
 
-	if (!string_next_value(vm, ss, &w)) {
-		error(vm, "bad definition");
+	if (!string_next_value(ss, &w)) {
+		error("bad definition");
 		exit(1);
 	}
 
 	body = mk_quot();
-	while (string_next_value(vm, ss, &v) && !is_word(";", v))
+	while (string_next_value(ss, &v) && !is_word(";", v))
 		array_push(as_ref(body), v);
 
-	def_word(vm, as_ref(w), as_ref(body));
+	def_word(as_ref(w), as_ref(body));
 }
 
-static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *r)
+static bool string_next_value(struct string_source *ss, value_t *r)
 {
-	if (!scan(vm, &ss->in, &ss->tok))
+	if (!scan(&ss->in, &ss->tok))
 		return false;
 
 	switch (ss->tok.type) {
@@ -579,14 +581,14 @@ static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *
 			*r = mk_false();
 
 		else if (!string_cmp_cstr(&ss->tok.str, "{"))
-			return syntax_array(vm, ss, r);
+			return syntax_array(ss, r);
 
 		else if (!string_cmp_cstr(&ss->tok.str, "["))
-			return syntax_quot(vm, ss, r);
+			return syntax_quot(ss, r);
 
 		else if (!string_cmp_cstr(&ss->tok.str, ":")) {
-			syntax_definition(vm, ss);
-			return string_next_value(vm, ss, r);
+			syntax_definition(ss);
+			return string_next_value(ss, r);
 
 		} else if (*ss->tok.str.b == ':')
 			*r = mk_symbol(&ss->tok.str);
@@ -603,14 +605,14 @@ static bool string_next_value(struct vm *vm, struct string_source *ss, value_t *
 	return true;
 }
 
-static struct array *_read(struct vm *vm, struct string *str)
+static struct array *_read(struct string *str)
 {
 	value_t v;
 	struct string_source in;
 	value_t a = mk_ref(array_create());
 
 	in.in = *str;
-	while (string_next_value(vm, &in, &v))
+	while (string_next_value(&in, &v))
 		array_push(as_ref(a), v);
 
 	return as_ref(a);
@@ -624,19 +626,20 @@ static void load_file(struct vm *vm, const char *path)
 	struct array *code;
 
 	if (stat(path, &info) < 0)
-		error(vm, "couldn't stat '%s'\n", path);
+		error("couldn't stat '%s'\n", path);
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0)
-		error(vm, "couldn't open '%s'\n", path);
+		error("couldn't open '%s'\n", path);
 
 	input.b = mmap(NULL, info.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (!input.b)
-		error(vm, "couldn't mmap '%s'\n", path);
+		error("couldn't mmap '%s'\n", path);
 
 	input.e = input.b + info.st_size;
 
-	code = _read(vm, &input);
+	global_vm = vm;
+	code = _read(&input);
 	eval(vm, code);
 	munmap(input.b, info.st_size);
 	close(fd);
@@ -652,7 +655,7 @@ static void print_stack(struct vm *vm, value_t s)
 
 	printf("\n--- Data stack:\n");
 	for (i = 0; i < a->nr_elts; i++) {
-		print_value(vm, stdout, array_get(a, i));
+		print_value(stdout, array_get(a, i));
 		printf("\n");
 	}
 }
@@ -672,7 +675,8 @@ static int repl(struct vm *vm)
 
 		input.b = buffer;
 		input.e = buffer + strlen(buffer);
-		eval(vm, _read(vm, &input));
+		global_vm = vm;
+		eval(vm, _read(&input));
 		print_stack(vm, vm->k->stack);
 	}
 
