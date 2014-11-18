@@ -18,7 +18,7 @@ static value_t mk_c_string(char *str)
 	return mk_ref(string_clone_cstr(str));
 }
 
-static int open_control_file()
+static int open_control_file(void)
 {
 	char buffer[1024];
 	snprintf(buffer, sizeof(buffer), "/dev/%s/%s", DM_DIR, DM_CONTROL_NODE);
@@ -48,7 +48,7 @@ static void dm_ioctl(int request, void *payload)
 		error("ioctl call failed");
 }
 
-static void dm_version()
+static void dm_version(void)
 {
 	char buffer[128];
 	struct dm_ioctl ctl;
@@ -61,7 +61,7 @@ static void dm_version()
 	PUSH(mk_c_string(buffer));
 }
 
-static void dm_remove_all()
+static void dm_remove_all(void)
 {
 	struct dm_ioctl ctl;
 
@@ -69,7 +69,7 @@ static void dm_remove_all()
 	dm_ioctl(DM_REMOVE_ALL, &ctl);
 }
 
-static void dm_list_devices()
+static void dm_list_devices(void)
 {
 	char buffer[8192];	/* FIXME: what if this buffer isn't big enough? */
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
@@ -107,7 +107,7 @@ static void copy_param(const char *param, char *dest, size_t max, struct string 
 	memcpy(dest, src->b, string_len(src));
 }
 
-static void dm_create()
+static void dm_create(void)
 {
 	struct dm_ioctl ctl;
 	struct string *uuid = as_type(STRING, POP());
@@ -130,27 +130,27 @@ static void dev_cmd(int request, unsigned flags)
 	dm_ioctl(request, &ctl);
 }
 
-static void dm_remove()
+static void dm_remove(void)
 {
 	dev_cmd(DM_DEV_REMOVE, 0);
 }
 
-static void dm_suspend()
+static void dm_suspend(void)
 {
 	dev_cmd(DM_DEV_SUSPEND, DM_SUSPEND_FLAG);
 }
 
-static void dm_resume()
+static void dm_resume(void)
 {
 	dev_cmd(DM_DEV_SUSPEND, 0);
 }
 
-static void dm_clear()
+static void dm_clear(void)
 {
 	dev_cmd(DM_TABLE_CLEAR, 0);
 }
 
-static void dm_load()
+static void dm_load(void)
 {
 	char buffer[8192];
 	struct array *table = as_type(ARRAY, POP());
@@ -233,12 +233,12 @@ static void status_cmd(unsigned flags)
 	PUSH(mk_ref(table));
 }
 
-static void dm_table()
+static void dm_table(void)
 {
 	status_cmd(DM_STATUS_TABLE_FLAG);
 }
 
-static void dm_status()
+static void dm_status(void)
 {
 	status_cmd(0);
 }

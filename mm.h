@@ -44,7 +44,7 @@ struct memory_stats {
 	unsigned nr_gcs;
 };
 
-struct memory_stats *get_memory_stats();
+struct memory_stats *get_memory_stats(void);
 
 //----------------------------------------------------------------
 
@@ -68,7 +68,7 @@ struct header *get_header(value_t v);
 enum object_type get_type(value_t v);
 
 enum tag get_tag(value_t v);
-value_t mk_false();
+value_t mk_false(void);
 
 unsigned as_fixnum(value_t v);
 void *as_type(enum object_type t, value_t v);

@@ -84,7 +84,7 @@ void push_byte(struct byte_array *ba, unsigned b)
 //----------------------------------------------------------------
 // Quotations
 
-value_t mk_quot()
+value_t mk_quot(void)
 {
 	struct array *a = array_create();
 	set_obj_type(a, QUOT);
@@ -361,12 +361,12 @@ void push_call(struct array *code)
 	array_push(as_ref(global_vm->k->call_stack), mk_ref(pc));
 }
 
-void pop_call()
+void pop_call(void)
 {
 	array_pop(as_ref(global_vm->k->call_stack));
 }
 
-static void inc_pc()
+static void inc_pc(void)
 {
 	struct array *s = as_ref(global_vm->k->call_stack);
 
@@ -450,7 +450,7 @@ static void eval_value(value_t v)
 	}
 }
 
-static bool more_code()
+static bool more_code(void)
 {
 	struct array *s = as_ref(global_vm->k->call_stack);
 	return s->nr_elts;
@@ -476,11 +476,11 @@ void eval(struct vm *vm, struct array *code)
 	while (r);
 	vm->handling_error = false;
 
-	while (more_code(vm)) {
+	while (more_code()) {
 		struct array *s = as_ref(vm->k->call_stack);
 		pc = as_type(CODE_POSITION, array_peek(s));
 		v = array_get(pc->code, pc->position);
-		inc_pc(vm);
+		inc_pc();
 		eval_value(v);
 	}
 }

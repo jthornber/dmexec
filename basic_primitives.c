@@ -7,13 +7,13 @@
 /*----------------------------------------------------------------
  * Primitives
  *--------------------------------------------------------------*/
-static void clear()
+static void clear(void)
 {
 	struct array *s = as_ref(global_vm->k->stack);
 	s->nr_elts = 0;
 }
 
-static void call()
+static void call(void)
 {
 	value_t callable = POP();
 
@@ -28,7 +28,7 @@ static void call()
 	}
 }
 
-static void callcc0()
+static void callcc0(void)
 {
 	value_t quot = POP();
 	struct continuation *k = alloc(CONTINUATION, sizeof(*k));
@@ -40,7 +40,7 @@ static void callcc0()
 	push_call(as_type(QUOT, quot));
 }
 
-static void continue_cc()
+static void continue_cc(void)
 {
 	value_t k = POP();
 
@@ -50,7 +50,7 @@ static void continue_cc()
 	global_vm->k = as_ref(k);
 }
 
-static void curry()
+static void curry(void)
 {
 	value_t q = POP();
 	value_t obj = POP();
@@ -59,21 +59,21 @@ static void curry()
 	unsigned i;
 
 	// FIXME: it would be nice to use array_unshift
-	new_q = quot_create(a->nr_elts + 1);
+	new_q = quot_create();
 	array_push(new_q, obj);
 	for (i = 0; i < a->nr_elts; i++)
 		array_push(new_q, array_get(a, i));
 	PUSH(mk_ref(new_q));
 }
 
-static void dot()
+static void dot(void)
 {
 	value_t v = POP();
 	print_value(stdout, v);
 	printf("\n");
 }
 
-static void ndrop()
+static void ndrop(void)
 {
 	unsigned i;
 	value_t v = POP();
@@ -82,7 +82,7 @@ static void ndrop()
 		POP();
 }
 
-static void nnip()
+static void nnip(void)
 {
 	unsigned i;
 	value_t v = POP();
@@ -94,13 +94,13 @@ static void nnip()
 	PUSH(restore);
 }
 
-static void _dup()
+static void _dup(void)
 {
 	value_t v = PEEK();
 	PUSH(v);
 }
 
-static void _dup2()
+static void _dup2(void)
 {
 	value_t y = PEEK();
 	value_t x = PEEKN(1);
@@ -108,7 +108,7 @@ static void _dup2()
 	PUSH(y);
 }
 
-static void _dup3()
+static void _dup3(void)
 {
 	value_t z = PEEK();
 	value_t y = PEEKN(1);
@@ -119,23 +119,23 @@ static void _dup3()
 	PUSH(z);
 }
 
-static void over()
+static void over(void)
 {
 	PUSH(PEEKN(1));
 }
 
-static void over2()
+static void over2(void)
 {
 	PUSH(PEEKN(2));
 	PUSH(PEEKN(2));
 }
 
-static void pick()
+static void pick(void)
 {
 	PUSH(PEEKN(2));
 }
 
-static void swap()
+static void swap(void)
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -143,7 +143,7 @@ static void swap()
 	PUSH(v2);
 }
 
-static void dip()
+static void dip(void)
 {
 #if 1
 	// bi only works with this branch
@@ -166,7 +166,7 @@ static void dip()
 #endif
 }
 
-static void fixnum_add()
+static void fixnum_add(void)
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -174,7 +174,7 @@ static void fixnum_add()
 	PUSH(mk_fixnum(as_fixnum(v1) + as_fixnum(v2)));
 }
 
-static void fixnum_sub()
+static void fixnum_sub(void)
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -182,7 +182,7 @@ static void fixnum_sub()
 	PUSH(mk_fixnum(as_fixnum(v2) - as_fixnum(v1)));
 }
 
-static void fixnum_mult()
+static void fixnum_mult(void)
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -190,7 +190,7 @@ static void fixnum_mult()
 	PUSH(mk_fixnum(as_fixnum(v2) * as_fixnum(v1)));
 }
 
-static void fixnum_div()
+static void fixnum_div(void)
 {
 	value_t v1 = POP();
 	value_t v2 = POP();
@@ -198,7 +198,7 @@ static void fixnum_div()
 	PUSH(mk_fixnum(as_fixnum(v2) / as_fixnum(v1)));
 }
 
-static void narray()
+static void narray(void)
 {
 	int n = as_fixnum(POP());
 	struct array *a = array_create();
@@ -210,7 +210,7 @@ static void narray()
 	PUSH(mk_ref(a));
 }
 
-static void each()
+static void each(void)
 {
 	value_t q = POP();
 	value_t a = POP();
@@ -233,7 +233,7 @@ static void each()
 	push_call(computation);
 }
 
-static void map()
+static void map(void)
 {
 	value_t q = POP();
 	value_t a = POP();
@@ -259,7 +259,7 @@ static void map()
 	push_call(computation);
 }
 
-static void choice()
+static void choice(void)
 {
 	value_t f = POP();
 	value_t t = POP();
@@ -271,7 +271,7 @@ static void choice()
 		PUSH(t);
 }
 
-static void mk_tuple()
+static void mk_tuple(void)
 {
 	unsigned i;
 	value_t name = POP();

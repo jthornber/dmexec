@@ -15,12 +15,12 @@ struct array *__array_create(unsigned nr_alloc)
 	return a;
 }
 
-struct array *array_create()
+struct array *array_create(void)
 {
 	return __array_create(4);
 }
 
-struct array *quot_create()
+struct array *quot_create(void)
 {
 	struct array *q = __array_create(4);
 	set_obj_type(q, QUOT);

@@ -4,7 +4,7 @@
 
 //----------------------------------------------------------------
 
-struct namespace *namespace_create()
+struct namespace *namespace_create(void)
 {
 	struct namespace *ns = alloc(NAMESPACE, sizeof(*ns));
 	ns->root = NULL;

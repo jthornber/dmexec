@@ -19,7 +19,7 @@ struct namespace {
 	struct node *root;
 };
 
-struct namespace *namespace_create();
+struct namespace *namespace_create(void);
 bool namespace_lookup(struct namespace *ns, struct string *k, value_t *result);
 void namespace_insert(struct namespace *ns, struct string *k, value_t v);
 

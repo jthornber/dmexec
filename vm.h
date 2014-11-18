@@ -67,13 +67,13 @@ typedef void (*prim_fn)(void);
 #define PEEKN(n) array_peekn(as_ref(global_vm->k->stack), n)
 
 void push_call(struct array *code);
-void pop_call();
+void pop_call(void);
 
 value_t mk_string(const char *b, const char *e);
 void def_primitive(struct vm *vm, char *k, prim_fn fn);
 
 void eval(struct vm *vm, struct array *code);
-value_t mk_quot();
+value_t mk_quot(void);
 void print_value(FILE *stream, value_t v);
 
 value_t mk_fixnum(int i);

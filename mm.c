@@ -15,7 +15,7 @@
 
 static struct memory_stats memory_stats_;
 
-static void out_of_memory()
+static void out_of_memory(void)
 {
 	error("out of memory");
 }
@@ -152,7 +152,7 @@ value_t clone_value(value_t v)
 	return mk_ref(clone(as_ref(v)));
 }
 
-value_t mk_false()
+value_t mk_false(void)
 {
 	value_t v;
 	v.i = TAG_FALSE;
