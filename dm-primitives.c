@@ -13,6 +13,9 @@
 
 /*----------------------------------------------------------------*/
 
+// FIXME: any resources, such as the fd for the ctl file must be cleaned up
+// when an error is thrown.  Opaque 'finalisable/resource' type.
+
 static value_t mk_c_string(char *str)
 {
 	return mk_ref(string_clone_cstr(str));
