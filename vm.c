@@ -333,7 +333,7 @@ static void init_continuation(struct continuation *k)
 static void init_vm(struct vm *vm)
 {
 	memset(vm, 0, sizeof(*vm));
-	vm->current_ns = namespace_create();
+	vm->current_ns = namespace_create(NULL);
 	vm->k = zalloc(CONTINUATION, sizeof(*vm->k));
 	init_continuation(vm->k);
 }

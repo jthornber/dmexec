@@ -4,9 +4,10 @@
 
 //----------------------------------------------------------------
 
-struct namespace *namespace_create(void)
+struct namespace *namespace_create(struct namespace *parent)
 {
 	struct namespace *ns = alloc(NAMESPACE, sizeof(*ns));
+	ns->parent = parent;
 	ns->root = NULL;
 	return ns;
 }
