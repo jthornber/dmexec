@@ -69,6 +69,13 @@ static inline value_t POP() {
 	return array_pop(as_ref(global_vm->k->stack));
 }
 
+static inline value_t POP_TYPE(enum object_type t) {
+	value_t v = POP();
+	if (get_type(v) != t)
+		error("type error, expected %d", t);
+	return v;
+}
+
 static inline value_t PEEK() {
 	return array_peek(as_ref(global_vm->k->stack));
 }

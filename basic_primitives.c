@@ -43,11 +43,7 @@ static void callcc0(void)
 
 static void continue_cc(void)
 {
-	value_t k = POP();
-
-	if (get_type(k) != CONTINUATION)
-		error("not a continuation");
-
+	value_t k = POP_TYPE(CONTINUATION);
 	global_vm->k = as_ref(k);
 }
 

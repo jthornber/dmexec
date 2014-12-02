@@ -109,7 +109,6 @@ struct header *get_header(value_t v)
 
 enum object_type get_type(value_t v)
 {
-
 	if (get_tag(v) == TAG_FIXNUM)
 		return FIXNUM;
 
