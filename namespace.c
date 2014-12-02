@@ -68,4 +68,28 @@ void namespace_insert(struct namespace *ns, struct string *k, value_t v)
 	*current = &e->node;
 }
 
+static void visit_node(struct node *n,
+		       void (*callback)(void *, struct string *, value_t),
+		       void *ctx)
+{
+	struct namespace_entry *e;
+
+	if (n->l)
+		visit_node(n->l, callback, ctx);
+
+	e = to_entry(n);
+	callback(ctx, e->key, e->value);
+
+	if (n->r)
+		visit_node(n->r, callback, ctx);
+}
+
+void namespace_visit(struct namespace *ns,
+		     void (*callback)(void *, struct string *, value_t),
+		     void *ctx)
+{
+	if (ns->root)
+		visit_node(ns->root, callback, ctx);
+}
+
 //----------------------------------------------------------------

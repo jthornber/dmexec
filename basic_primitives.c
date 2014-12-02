@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "namespace.h"
 #include "vm.h"
 
 /*----------------------------------------------------------------
@@ -291,6 +292,17 @@ static void mk_tuple(void)
 	PUSH(r);
 }
 
+void mk_namespace(void)
+{
+	struct namespace *n = namespace_create(NULL);
+	PUSH(mk_ref(n));
+}
+
+void namestack_star(void)
+{
+	PUSH(mk_ref(global_vm->current_ns));
+}
+
 void def_basic_primitives(struct vm *vm)
 {
 	def_primitive(vm, "clear", clear);
@@ -324,6 +336,9 @@ void def_basic_primitives(struct vm *vm)
 	def_primitive(vm, "continue", continue_cc);
 
 	def_primitive(vm, "mk-tuple", mk_tuple);
+
+	def_primitive(vm, "namespace", mk_namespace);
+	def_primitive(vm, "namestack*", namestack_star);
 }
 
 /*----------------------------------------------------------------*/

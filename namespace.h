@@ -23,6 +23,9 @@ struct namespace {
 struct namespace *namespace_create(struct namespace *parent);
 bool namespace_lookup(struct namespace *ns, struct string *k, value_t *result);
 void namespace_insert(struct namespace *ns, struct string *k, value_t v);
+void namespace_visit(struct namespace *ns,
+		     void (*callback)(void *, struct string *, value_t),
+		     void * ctxt);
 
 //----------------------------------------------------------------
 

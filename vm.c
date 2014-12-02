@@ -142,6 +142,23 @@ static void print_word(FILE *stream, struct string *w)
 		fputc(*ptr, stream);
 }
 
+static void print_namespace_entry(void *ctxt, struct string *k, value_t v)
+{
+	FILE *stream = ctxt;
+	fprintf(stream, "{ ");
+	print_word(stream, k);
+	fprintf(stream, " ");
+	print_value(stream, v);
+	fprintf(stream, " } ");
+}
+
+static void print_namespace(FILE *stream, struct namespace *ns)
+{
+	fprintf(stream, "H{ ");
+	namespace_visit(ns, print_namespace_entry, stream);
+	fprintf(stream, "}");
+}
+
 void print_value(FILE *stream, value_t v)
 {
 	struct header *h;
@@ -159,7 +176,7 @@ void print_value(FILE *stream, value_t v)
 			break;
 
 		case NAMESPACE:
-			fprintf(stream, "~namespace~");
+			print_namespace(stream, v.ptr);
 			break;
 
 		case NAMESPACE_ENTRY:
