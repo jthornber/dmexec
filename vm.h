@@ -61,10 +61,21 @@ extern struct vm *global_vm;
 
 typedef void (*prim_fn)(void);
 
-#define PUSH(v) array_push(as_ref(global_vm->k->stack), v)
-#define POP() array_pop(as_ref(global_vm->k->stack))
-#define PEEK() array_peek(as_ref(global_vm->k->stack))
-#define PEEKN(n) array_peekn(as_ref(global_vm->k->stack), n)
+static inline void PUSH(value_t v) {
+	array_push(as_ref(global_vm->k->stack), v);
+}
+
+static inline value_t POP() {
+	return array_pop(as_ref(global_vm->k->stack));
+}
+
+static inline value_t PEEK() {
+	return array_peek(as_ref(global_vm->k->stack));
+}
+
+static inline value_t PEEKN(unsigned n) {
+	return array_peekn(as_ref(global_vm->k->stack), n);
+}
 
 void push_call(struct array *code);
 void pop_call(void);
