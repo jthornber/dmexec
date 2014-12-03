@@ -2,6 +2,7 @@
 
 #include "mm.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <sys/param.h>
 
@@ -43,7 +44,7 @@ int string_cmp(struct string *lhs, struct string *rhs)
 	if (lhs_len < rhs_len)
 		return -1;
 
-	if (rhs_len > lhs_len)
+	if (lhs_len > rhs_len)
 		return 1;
 
 	return 0;
