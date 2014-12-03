@@ -21,7 +21,7 @@
 value_t mk_word_like(enum object_type type, struct string *str)
 {
 	struct string *w = string_clone(str);
-	set_obj_type(w, WORD);
+	set_obj_type(w, type);
 	return mk_ref(w);
 }
 
