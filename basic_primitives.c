@@ -299,6 +299,24 @@ void namestack_star(void)
 	PUSH(mk_ref(global_vm->current_ns));
 }
 
+void namespace_get(void)
+{
+	value_t v;
+	struct string *k = as_ref(POP_TYPE(SYMBOL));
+
+	if (namespace_lookup(global_vm->current_ns, k, &v))
+		PUSH(v);
+	else
+		PUSH(mk_false());
+}
+
+void namespace_set(void)
+{
+	struct string *k = as_ref(POP_TYPE(SYMBOL));
+	value_t v = POP();
+	namespace_insert(global_vm->current_ns, k, v);
+}
+
 void def_basic_primitives(struct vm *vm)
 {
 	def_primitive(vm, "clear", clear);
@@ -335,6 +353,9 @@ void def_basic_primitives(struct vm *vm)
 
 	def_primitive(vm, "namespace", mk_namespace);
 	def_primitive(vm, "namestack*", namestack_star);
+
+	def_primitive(vm, "get", namespace_get);
+	def_primitive(vm, "set", namespace_set);
 }
 
 /*----------------------------------------------------------------*/

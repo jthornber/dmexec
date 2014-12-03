@@ -17,7 +17,7 @@ static inline struct namespace_entry *to_entry(struct node *n)
 	return container_of(n, struct namespace_entry, node);
 }
 
-bool namespace_lookup(struct namespace *ns, struct string *k, value_t *result)
+static bool lookup_shallow(struct namespace *ns, struct string *k, value_t *result)
 {
 	int c;
 	struct node *n = ns->root;
@@ -38,6 +38,21 @@ bool namespace_lookup(struct namespace *ns, struct string *k, value_t *result)
 	}
 
 	return false;
+}
+
+bool namespace_lookup(struct namespace *ns, struct string *k, value_t *result)
+{
+	bool r;
+
+retry:
+	r = lookup_shallow(ns, k, result);
+
+	if (!r && ns->parent) {
+		ns = ns->parent;
+		goto retry;
+	}
+
+	return r;
 }
 
 void namespace_insert(struct namespace *ns, struct string *k, value_t v)
