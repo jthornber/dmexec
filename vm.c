@@ -94,7 +94,7 @@ value_t mk_quot(void)
 //----------------------------------------------------------------
 // Printing values
 
-static void print_string(FILE *stream, struct string *str)
+void print_string(FILE *stream, struct string *str)
 {
 	const char *ptr;
 
@@ -502,16 +502,8 @@ void eval(struct vm *vm, struct array *code)
 	}
 }
 
-void error(const char *format, ...)
+void throw(void)
 {
-	va_list ap;
-
-	va_start(ap, format);
-	vfprintf(stderr, format, ap);
-	va_end(ap);
-
-	fprintf(stderr, "\n");
-
 	if (global_vm->handling_error) {
 		fprintf(stderr, "error whilst handling error, aborting");
 		abort();
@@ -532,6 +524,18 @@ void error(const char *format, ...)
 		exit(1);
 	}
 #endif
+}
+
+void error(const char *format, ...)
+{
+	va_list ap;
+
+	va_start(ap, format);
+	vfprintf(stderr, format, ap);
+	va_end(ap);
+
+	fprintf(stderr, "\n");
+	throw();
 }
 
 //----------------------------------------------------------------

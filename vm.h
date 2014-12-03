@@ -101,6 +101,9 @@ value_t mk_symbol(struct string *str);
 value_t mk_word(struct string *str);
 value_t mk_word_cstr(char *str);
 
+void throw(void);
+void print_string(FILE *stream, struct string *str);
+
 /*----------------------------------------------------------------*/
 
 #endif

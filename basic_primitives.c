@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
 
 #include "namespace.h"
 #include "vm.h"
@@ -331,8 +332,18 @@ void namespace_pop(void)
 	global_vm->current_ns = global_vm->current_ns->parent;
 }
 
+void throw_error(void)
+{
+	struct string *msg = as_ref(POP_TYPE(STRING));
+	fprintf(stderr, "throwing: ");
+	print_string(stderr, msg);
+	fprintf(stderr, "\n");
+	throw();
+}
+
 void def_basic_primitives(struct vm *vm)
 {
+	def_primitive(vm, "error", throw_error);
 	def_primitive(vm, "clear", clear);
 	def_primitive(vm, ".", dot);
 	def_primitive(vm, "ndrop", ndrop);
