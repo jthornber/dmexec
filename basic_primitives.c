@@ -317,6 +317,20 @@ void namespace_set(void)
 	namespace_insert(global_vm->current_ns, k, v);
 }
 
+void namespace_push(void)
+{
+	struct namespace *n = as_ref(POP_TYPE(NAMESPACE));
+	n->parent = global_vm->current_ns;
+	global_vm->current_ns = n;
+}
+
+void namespace_pop(void)
+{
+	if (!global_vm->current_ns->parent)
+		error("cannot remove global namespace");
+	global_vm->current_ns = global_vm->current_ns->parent;
+}
+
 void def_basic_primitives(struct vm *vm)
 {
 	def_primitive(vm, "clear", clear);
@@ -352,10 +366,13 @@ void def_basic_primitives(struct vm *vm)
 	def_primitive(vm, "mk-tuple", mk_tuple);
 
 	def_primitive(vm, "namespace", mk_namespace);
-	def_primitive(vm, "namestack*", namestack_star);
+	def_primitive(vm, "namestack*", namestack_star); /* FIXME: I'm not sure this is needed */
 
 	def_primitive(vm, "get", namespace_get);
 	def_primitive(vm, "set", namespace_set);
+
+	def_primitive(vm, "namespace-push", namespace_push);
+	def_primitive(vm, "namespace-pop", namespace_pop);
 }
 
 /*----------------------------------------------------------------*/

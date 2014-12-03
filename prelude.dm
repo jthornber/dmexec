@@ -62,3 +62,5 @@
 : ?if pick [ drop [ drop ] 2dip call ] [ 2nip call ] if ;
 
 : loop [ call ] keep [ loop ] curry when ;
+
+: with-namespace namespace namespace-push call namespace-pop ;
