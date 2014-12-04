@@ -19,7 +19,10 @@ enum object_type {
 	ARRAY,
 	CODE_POSITION,
 	CONTINUATION,
-	FIXNUM			/* these are always tagged immediate values */
+
+	/* these are always tagged immediate values */
+	FIXNUM,
+	FALSE_TYPE
 };
 
 struct header {
@@ -69,8 +72,9 @@ enum object_type get_type(value_t v);
 
 enum tag get_tag(value_t v);
 value_t mk_false(void);
+value_t mk_true(void);
 
-unsigned as_fixnum(value_t v);
+int as_fixnum(value_t v);
 void *as_type(enum object_type t, value_t v);
 
 //----------------------------------------------------------------

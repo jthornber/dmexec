@@ -289,18 +289,18 @@ static void mk_tuple(void)
 	PUSH(r);
 }
 
-void mk_namespace(void)
+static void mk_namespace(void)
 {
 	struct namespace *n = namespace_create(NULL);
 	PUSH(mk_ref(n));
 }
 
-void namestack_star(void)
+static void namestack_star(void)
 {
 	PUSH(mk_ref(global_vm->current_ns));
 }
 
-void namespace_get(void)
+static void namespace_get(void)
 {
 	value_t v;
 	struct string *k = as_ref(POP_TYPE(SYMBOL));
@@ -311,28 +311,28 @@ void namespace_get(void)
 		PUSH(mk_false());
 }
 
-void namespace_set(void)
+static void namespace_set(void)
 {
 	struct string *k = as_ref(POP_TYPE(SYMBOL));
 	value_t v = POP();
 	namespace_insert(global_vm->current_ns, k, v);
 }
 
-void namespace_push(void)
+static void namespace_push(void)
 {
 	struct namespace *n = as_ref(POP_TYPE(NAMESPACE));
 	n->parent = global_vm->current_ns;
 	global_vm->current_ns = n;
 }
 
-void namespace_pop(void)
+static void namespace_pop(void)
 {
 	if (!global_vm->current_ns->parent)
 		error("cannot remove global namespace");
 	global_vm->current_ns = global_vm->current_ns->parent;
 }
 
-void throw_error(void)
+static void throw_error(void)
 {
 	struct string *msg = as_ref(POP_TYPE(STRING));
 	fprintf(stderr, "throwing: ");
@@ -341,8 +341,73 @@ void throw_error(void)
 	throw();
 }
 
+static bool ll_eq(value_t v1, value_t v2)
+{
+	enum object_type t = get_type(v1);
+
+	if (get_type(v2) != t)
+		return false;
+
+	// FIXME: if refs are equal then we don't need to do a deep comparison
+	switch (t) {
+	case ARRAY:
+		// FIXME: factor out
+	{
+		unsigned i;
+		struct array *a1 = v1.ptr;
+		struct array *a2 = v2.ptr;
+
+		if (a1->nr_elts != a2->nr_elts)
+			return false;
+
+		for (i = 0; i < a1->nr_elts; i++)
+			if (!ll_eq(array_get(a1, i),
+				   array_get(a2, i)))
+				return false;
+
+		return true;
+	}
+
+	case FORWARD:
+	case NAMESPACE:
+	case NAMESPACE_ENTRY:
+	case PRIMITIVE:
+	case STRING:
+	case BYTE_ARRAY:
+	case TUPLE:
+	case SYMBOL:
+	case WORD:
+	case QUOT:
+
+	case CODE_POSITION:
+	case CONTINUATION:
+		error("eq not implemented for this type");
+
+	case FIXNUM:
+		return as_fixnum(v1) == as_fixnum(v2);
+
+	case FALSE_TYPE:
+		return true;
+	}
+
+	return false;
+}
+
+static void eq(void)
+{
+	value_t v1 = POP();
+	value_t v2 = POP();
+
+	if (ll_eq(v1, v2))
+		PUSH(mk_true());
+	else
+		PUSH(mk_false());
+}
+
 void def_basic_primitives(struct vm *vm)
 {
+	def_primitive(vm, "eq", eq);
+
 	def_primitive(vm, "error", throw_error);
 	def_primitive(vm, "clear", clear);
 	def_primitive(vm, ".", dot);

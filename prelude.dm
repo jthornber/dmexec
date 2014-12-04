@@ -64,3 +64,6 @@
 : loop [ call ] keep [ loop ] curry when ;
 
 : with-namespace namespace namespace-push call namespace-pop ;
+
+
+: test-case call eq [ "failed test" error ] unless ;

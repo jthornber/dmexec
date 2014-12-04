@@ -7,6 +7,7 @@
 #define HEADER_MAGIC 846219U
 
 #include "error.h"
+#include "string_type.h"
 
 //----------------------------------------------------------------
 // Memory manager
@@ -112,6 +113,9 @@ enum object_type get_type(value_t v)
 	if (get_tag(v) == TAG_FIXNUM)
 		return FIXNUM;
 
+	if (get_tag(v) == TAG_FALSE)
+		return FALSE_TYPE;
+
 	return get_obj_type(as_ref(v));
 }
 
@@ -132,7 +136,7 @@ value_t mk_fixnum(int i)
 	return v;
 }
 
-unsigned as_fixnum(value_t v)
+int as_fixnum(value_t v)
 {
 	if (get_tag(v) != TAG_FIXNUM)
 		error("type error: expected fixnum.");
@@ -156,6 +160,16 @@ value_t mk_false(void)
 	value_t v;
 	v.i = TAG_FALSE;
 	return v;
+}
+
+// FIXME: move else where, and factor out common code with mk-symbol
+value_t mk_true(void)
+{
+	struct string str, *copy;
+	string_tmp(":true", &str);
+	copy = string_clone(&str);
+	set_obj_type(copy, SYMBOL);
+	return mk_ref(copy);
 }
 
 bool is_false(value_t v)
