@@ -65,5 +65,6 @@
 
 : with-namespace namespace namespace-push call namespace-pop ;
 
+: continue f swap continue-with ;
 
 : test-case call eq [ "failed test" error ] unless ;

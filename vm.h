@@ -39,9 +39,9 @@ struct token {
 };
 
 struct continuation {
-	// FIXME: why are these value_t's rather than bare arrays?
-	value_t stack;
-	value_t call_stack;
+	struct array *data_stack;
+	struct array *call_stack;
+	struct array *catch_stack;
 };
 
 struct vm {
@@ -50,7 +50,6 @@ struct vm {
 
 	jmp_buf eval_loop;
 	bool handling_error;	// FIXME: is this needed?
-	struct array *exception_stack;
 };
 
 // Rather than constantly pass the single vm instance around I'm going to
@@ -62,11 +61,11 @@ extern struct vm *global_vm;
 typedef void (*prim_fn)(void);
 
 static inline void PUSH(value_t v) {
-	array_push(as_ref(global_vm->k->stack), v);
+	array_push(global_vm->k->data_stack, v);
 }
 
 static inline value_t POP() {
-	return array_pop(as_ref(global_vm->k->stack));
+	return array_pop(global_vm->k->data_stack);
 }
 
 static inline value_t POP_TYPE(enum object_type t) {
@@ -77,11 +76,11 @@ static inline value_t POP_TYPE(enum object_type t) {
 }
 
 static inline value_t PEEK() {
-	return array_peek(as_ref(global_vm->k->stack));
+	return array_peek(global_vm->k->data_stack);
 }
 
 static inline value_t PEEKN(unsigned n) {
-	return array_peekn(as_ref(global_vm->k->stack), n);
+	return array_peekn(global_vm->k->data_stack, n);
 }
 
 void push_call(struct array *code);
@@ -103,6 +102,8 @@ value_t mk_word_cstr(char *str);
 
 void throw(void);
 void print_string(FILE *stream, struct string *str);
+
+struct continuation *cc(struct vm *vm);
 
 /*----------------------------------------------------------------*/
 

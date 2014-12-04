@@ -11,8 +11,7 @@
  *--------------------------------------------------------------*/
 static void clear(void)
 {
-	struct array *s = as_ref(global_vm->k->stack);
-	s->nr_elts = 0;
+	global_vm->k->data_stack->nr_elts = 0;
 }
 
 static void call(void)
@@ -30,22 +29,18 @@ static void call(void)
 	}
 }
 
-static void callcc0(void)
+static void current_continuation(void)
 {
-	value_t quot = POP();
-	struct continuation *k = alloc(CONTINUATION, sizeof(*k));
-
-	k->stack = clone_value(global_vm->k->stack);
-	k->call_stack = clone_value(global_vm->k->call_stack);
-
-	PUSH(mk_ref(k));
-	push_call(as_type(QUOT, quot));
+	PUSH(mk_ref(cc(global_vm)));
 }
 
-static void continue_cc(void)
+static void continue_with(void)
 {
 	value_t k = POP_TYPE(CONTINUATION);
+	value_t obj = POP();
+
 	global_vm->k = as_ref(k);
+	PUSH(obj);
 }
 
 static void curry(void)
@@ -341,6 +336,12 @@ static void throw_error(void)
 	throw();
 }
 
+static void rethrow_error(void)
+{
+	fprintf(stderr, "rethrowing");
+	throw();
+}
+
 static bool ll_eq(value_t v1, value_t v2)
 {
 	enum object_type t = get_type(v1);
@@ -408,7 +409,10 @@ void def_basic_primitives(struct vm *vm)
 {
 	def_primitive(vm, "eq", eq);
 
-	def_primitive(vm, "error", throw_error);
+	def_primitive(vm, "throw", throw_error);
+	def_primitive(vm, "rethrow", rethrow_error);
+//	def_primitive(vm, "recover", recover);
+
 	def_primitive(vm, "clear", clear);
 	def_primitive(vm, ".", dot);
 	def_primitive(vm, "ndrop", ndrop);
@@ -436,8 +440,8 @@ void def_basic_primitives(struct vm *vm)
 	def_primitive(vm, "each", each);
 	def_primitive(vm, "map", map);
 
-	def_primitive(vm, "callcc0", callcc0);
-	def_primitive(vm, "continue", continue_cc);
+	def_primitive(vm, "current-continuation", current_continuation);
+	def_primitive(vm, "continue-with", continue_with);
 
 	def_primitive(vm, "mk-tuple", mk_tuple);
 

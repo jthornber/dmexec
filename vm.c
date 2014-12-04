@@ -223,6 +223,10 @@ void print_value(FILE *stream, value_t v)
 		case FIXNUM:
 			fprintf(stream, "~boxed fixnum?!~");
 			break;
+
+		case FALSE_TYPE:
+			fprintf(stream, "f");
+			break;
 		}
 		break;
 
@@ -343,8 +347,9 @@ struct dynamic_scope {
 
 static void init_continuation(struct continuation *k)
 {
-	k->stack = mk_ref(array_create());
-	k->call_stack = mk_ref(array_create());
+	k->data_stack = array_create();
+	k->call_stack = array_create();
+	k->catch_stack = array_create();
 }
 
 static void init_vm(struct vm *vm)
@@ -375,17 +380,17 @@ void push_call(struct array *code)
 	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
 	pc->code = code;
 	pc->position = 0;
-	array_push(as_ref(global_vm->k->call_stack), mk_ref(pc));
+	array_push(global_vm->k->call_stack, mk_ref(pc));
 }
 
 void pop_call(void)
 {
-	array_pop(as_ref(global_vm->k->call_stack));
+	array_pop(global_vm->k->call_stack);
 }
 
 static void inc_pc(void)
 {
-	struct array *s = as_ref(global_vm->k->call_stack);
+	struct array *s = global_vm->k->call_stack;
 
 	if (s->nr_elts) {
 		struct code_position *pc = as_type(CODE_POSITION, array_peek(s));
@@ -427,6 +432,7 @@ static void eval_value(value_t v)
 		case QUOT:
 		case CONTINUATION:
 		case SYMBOL:
+		case FALSE_TYPE:
 			PUSH(v);
 			break;
 
@@ -448,11 +454,8 @@ static void eval_value(value_t v)
 				}
 
 			} else {
-				// FIXME: add better error handling
+				print_string(stderr, w);
 				error("couldn't lookup word");
-				//for (b = w->b; b != w->e; b++)
-				//	fprintf(stderr, "%c", *b);
-				//fprintf(stderr, "'\n");
 			}
 			break;
 
@@ -469,11 +472,21 @@ static void eval_value(value_t v)
 
 static bool more_code(void)
 {
-	struct array *s = as_ref(global_vm->k->call_stack);
-	return s->nr_elts;
+	return global_vm->k->call_stack->nr_elts > 0;
 }
 
 struct vm *global_vm = NULL;
+
+struct continuation *cc(struct vm *vm)
+{
+	struct continuation *k = alloc(CONTINUATION, sizeof(*k));
+
+	k->data_stack = clone(vm->k->data_stack);
+	k->call_stack = clone(vm->k->call_stack);
+	k->catch_stack = clone(vm->k->catch_stack);
+
+	return k;
+}
 
 void eval(struct vm *vm, struct array *code)
 {
@@ -484,9 +497,9 @@ void eval(struct vm *vm, struct array *code)
 	if (!code->nr_elts)
 		return;
 
-	// FIXME: we need to push a continuation on the exception stack at
-	// this point.  ie. before the code gets pushed.
-
+	// We push a continuation on the exception stack before the code
+	// gets pushed.
+	array_push(vm->k->catch_stack, mk_ref(cc(vm)));
 	push_call(code);
 	do
 		r = setjmp(vm->eval_loop);
@@ -494,7 +507,7 @@ void eval(struct vm *vm, struct array *code)
 	vm->handling_error = false;
 
 	while (more_code()) {
-		struct array *s = as_ref(vm->k->call_stack);
+		struct array *s = vm->k->call_stack;
 		pc = as_type(CODE_POSITION, array_peek(s));
 		v = array_get(pc->code, pc->position);
 		inc_pc();
@@ -509,13 +522,10 @@ void throw(void)
 		abort();
 	}
 
-#if 1
-	longjmp(global_vm->eval_loop, 1);
-#else
-	if (global_vm->exception_stack->nr_elts) {
+	if (global_vm->k->catch_stack->nr_elts) {
 		global_vm->handling_error = true;
 		fprintf(stderr, "jumping back to eval loop");
-		global_vm->k = as_ref(array_pop(global_vm->exception_stack));
+		global_vm->k = as_ref(array_pop(global_vm->k->catch_stack));
 		longjmp(global_vm->eval_loop, -1);
 
 	} else {
@@ -523,7 +533,6 @@ void throw(void)
 		fprintf(stderr, "no error handler, exiting\n");
 		exit(1);
 	}
-#endif
 }
 
 void error(const char *format, ...)
@@ -714,7 +723,7 @@ static int repl(struct vm *vm)
 		input.e = buffer + strlen(buffer);
 		global_vm = vm;
 		eval(vm, _read(&input));
-		print_stack(vm, vm->k->stack);
+		print_stack(vm, mk_ref(vm->k->data_stack));
 	}
 
 	return 0;
