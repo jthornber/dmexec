@@ -16,7 +16,8 @@ CFLAGS=\
 INCLUDES=\
 	-I.
 
-LIBS=
+LIBS=\
+	-lreadline
 
 SOURCE=\
 	array.c \
@@ -50,6 +51,6 @@ clean:
 
 dmexec: $(OBJECTS)
 	@echo "    [LD]  $@"
-	$(V) $(CC) $(CFLAGS) -o $@ $+
+	$(V) $(CC) $(CFLAGS) $(LIBS) -o $@ $+
 
 -include $(DEPENDS)

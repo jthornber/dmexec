@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "namespace.h"
 #include "primitives.h"
@@ -706,17 +708,38 @@ static void print_stack(struct vm *vm, value_t s)
 	}
 }
 
+
+/* A static variable for holding the line. */
+static char *line_read = (char *)NULL;
+
+/* Read a string, and return a pointer to it.
+   Returns NULL on EOF. */
+char *rl_gets ()
+{
+	/* If the buffer has already been allocated,
+	   return the memory to the free pool. */
+	if (line_read) {
+		free(line_read);
+		line_read = (char *)NULL;
+	}
+
+	line_read = readline("dmexec> ");
+
+	if (line_read && *line_read)
+		add_history(line_read);
+
+	return line_read;
+}
+
 // FIXME: this should be written in dm code
 static int repl(struct vm *vm)
 {
-	char buffer[4096];
+	char *buffer;
 	struct string input;
 
 	for (;;) {
-		printf("dmexec> ");
-		fflush(stdout);
-
-		if (!fgets(buffer, sizeof(buffer), stdin))
+		buffer = rl_gets();
+		if (!buffer)
 			break;
 
 		input.b = buffer;
