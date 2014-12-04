@@ -40,6 +40,8 @@
 : tri* [ [ 2dip ] dip dip ] dip call ;
 : 2tri* [ 4dip ] 2dip 2bi* ;
 
+: pop* pop drop ;
+
 : bi@ dup bi* ;
 : 2bi@ dup 2bi* ;
 : tri@ dup dup tri* ;

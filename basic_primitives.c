@@ -226,6 +226,18 @@ static void each(void)
 	push_call(computation);
 }
 
+static void _push(void)
+{
+	struct array *a = as_ref(POP_TYPE(ARRAY));
+	array_push(a, POP());
+}
+
+static void _pop(void)
+{
+	struct array *a = as_ref(POP_TYPE(ARRAY));
+	PUSH(array_pop(a));
+}
+
 static void map(void)
 {
 	value_t q = POP();
@@ -342,6 +354,11 @@ static void rethrow_error(void)
 	throw();
 }
 
+static void catch_stack(void)
+{
+	PUSH(mk_ref(global_vm->k->catch_stack));
+}
+
 static bool ll_eq(value_t v1, value_t v2)
 {
 	enum object_type t = get_type(v1);
@@ -409,9 +426,9 @@ void def_basic_primitives(struct vm *vm)
 {
 	def_primitive(vm, "eq", eq);
 
+	def_primitive(vm, "catch-stack", catch_stack);
 	def_primitive(vm, "throw", throw_error);
 	def_primitive(vm, "rethrow", rethrow_error);
-//	def_primitive(vm, "recover", recover);
 
 	def_primitive(vm, "clear", clear);
 	def_primitive(vm, ".", dot);
@@ -439,6 +456,8 @@ void def_basic_primitives(struct vm *vm)
 	def_primitive(vm, "narray", narray);
 	def_primitive(vm, "each", each);
 	def_primitive(vm, "map", map);
+	def_primitive(vm, "push", _push);
+	def_primitive(vm, "pop", _pop);
 
 	def_primitive(vm, "current-continuation", current_continuation);
 	def_primitive(vm, "continue-with", continue_with);
