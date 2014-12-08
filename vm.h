@@ -105,6 +105,8 @@ void print_string(FILE *stream, struct string *str);
 
 struct continuation *cc(struct vm *vm);
 
+void inc_pc(void);
+
 /*----------------------------------------------------------------*/
 
 #endif

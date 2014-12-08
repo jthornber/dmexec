@@ -62,6 +62,7 @@ static void dm_version(void)
 	snprintf(buffer, sizeof(buffer), "%u.%u.%u",
 		 ctl.version[0], ctl.version[1], ctl.version[2]);
 	PUSH(mk_c_string(buffer));
+	inc_pc();
 }
 
 static void dm_remove_all(void)
@@ -70,6 +71,7 @@ static void dm_remove_all(void)
 
 	init_ctl(&ctl, sizeof(ctl));
 	dm_ioctl(DM_REMOVE_ALL, &ctl);
+	inc_pc();
 }
 
 static void dm_list_devices(void)
@@ -84,6 +86,7 @@ static void dm_list_devices(void)
 
 	if (ctl->flags & DM_BUFFER_FULL_FLAG) {
 		PUSH(mk_c_string("buffer full flag set"));
+		inc_pc();
 		return;
 	}
 
@@ -100,6 +103,7 @@ static void dm_list_devices(void)
 	}
 
 	PUSH(results);
+	inc_pc();
 }
 
 static void copy_param(const char *param, char *dest, size_t max, struct string *src)
@@ -120,6 +124,7 @@ static void dm_create(void)
 	copy_param("name", ctl.name, DM_NAME_LEN, name);
 	copy_param("uuid", ctl.uuid, DM_UUID_LEN, uuid);
 	dm_ioctl(DM_DEV_CREATE, &ctl);
+	inc_pc();
 }
 
 static void dev_cmd(int request, unsigned flags)
@@ -131,6 +136,7 @@ static void dev_cmd(int request, unsigned flags)
 	ctl.flags = flags;
 	copy_param("name", ctl.name, DM_NAME_LEN, name);
 	dm_ioctl(request, &ctl);
+	inc_pc();
 }
 
 static void dm_remove(void)
@@ -198,6 +204,7 @@ static void dm_load(void)
 
 	// FIXME: no bounds checking
 	dm_ioctl(DM_TABLE_LOAD, ctl);
+	inc_pc();
 }
 
 static void status_cmd(unsigned flags)
@@ -234,6 +241,7 @@ static void status_cmd(unsigned flags)
 	}
 
 	PUSH(mk_ref(table));
+	inc_pc();
 }
 
 static void dm_table(void)
@@ -262,6 +270,7 @@ static void dm_message()
 	// FIXME: bounds checking
 	memcpy(msg->message, txt->b, string_len(txt));
 	dm_ioctl(DM_TARGET_MSG, ctl);
+	inc_pc();
 }
 
 /*----------------------------------------------------------------*/

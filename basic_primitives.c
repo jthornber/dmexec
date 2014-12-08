@@ -12,6 +12,7 @@
 static void clear(void)
 {
 	global_vm->k->data_stack->nr_elts = 0;
+	inc_pc();
 }
 
 static void call(void)
@@ -20,6 +21,7 @@ static void call(void)
 
 	switch (get_type(callable)) {
 	case QUOT:
+		inc_pc();
 		push_call(as_ref(callable));
 		break;
 
@@ -32,6 +34,7 @@ static void call(void)
 static void current_continuation(void)
 {
 	PUSH(mk_ref(cc(global_vm)));
+	inc_pc();
 }
 
 static void continue_with(void)
@@ -41,6 +44,7 @@ static void continue_with(void)
 
 	global_vm->k = as_ref(k);
 	PUSH(obj);
+	inc_pc();
 }
 
 static void curry(void)
@@ -57,6 +61,7 @@ static void curry(void)
 	for (i = 0; i < a->nr_elts; i++)
 		array_push(new_q, array_get(a, i));
 	PUSH(mk_ref(new_q));
+	inc_pc();
 }
 
 static void dot(void)
@@ -64,6 +69,7 @@ static void dot(void)
 	value_t v = POP();
 	print_value(stdout, v);
 	printf("\n");
+	inc_pc();
 }
 
 static void ndrop(void)
@@ -73,6 +79,7 @@ static void ndrop(void)
 
 	for (i = as_fixnum(v); i; i--)
 		POP();
+	inc_pc();
 }
 
 static void nnip(void)
@@ -85,12 +92,14 @@ static void nnip(void)
 		POP();
 
 	PUSH(restore);
+	inc_pc();
 }
 
 static void _dup(void)
 {
 	value_t v = PEEK();
 	PUSH(v);
+	inc_pc();
 }
 
 static void _dup2(void)
@@ -99,6 +108,7 @@ static void _dup2(void)
 	value_t x = PEEKN(1);
 	PUSH(x);
 	PUSH(y);
+	inc_pc();
 }
 
 static void _dup3(void)
@@ -110,22 +120,26 @@ static void _dup3(void)
 	PUSH(x);
 	PUSH(y);
 	PUSH(z);
+	inc_pc();
 }
 
 static void over(void)
 {
 	PUSH(PEEKN(1));
+	inc_pc();
 }
 
 static void over2(void)
 {
 	PUSH(PEEKN(2));
 	PUSH(PEEKN(2));
+	inc_pc();
 }
 
 static void pick(void)
 {
 	PUSH(PEEKN(2));
+	inc_pc();
 }
 
 static void swap(void)
@@ -134,29 +148,19 @@ static void swap(void)
 	value_t v2 = POP();
 	PUSH(v1);
 	PUSH(v2);
+	inc_pc();
 }
 
 static void dip(void)
 {
-#if 1
-	// bi only works with this branch
 	value_t q = POP();
 	value_t x = POP();
 
 	value_t after = mk_quot();
 	array_push(as_ref(after), x);
+	inc_pc();
 	push_call(as_ref(after));
-
-	PUSH(q);
-	call();
-#else
-	value_t q = POP();
-	value_t x = POP();
-
-	PUSH(q);
-	call(vm);
-	PUSH(x);
-#endif
+	push_call(as_ref(q));
 }
 
 static void fixnum_add(void)
@@ -165,6 +169,7 @@ static void fixnum_add(void)
 	value_t v2 = POP();
 
 	PUSH(mk_fixnum(as_fixnum(v1) + as_fixnum(v2)));
+	inc_pc();
 }
 
 static void fixnum_sub(void)
@@ -173,6 +178,7 @@ static void fixnum_sub(void)
 	value_t v2 = POP();
 
 	PUSH(mk_fixnum(as_fixnum(v2) - as_fixnum(v1)));
+	inc_pc();
 }
 
 static void fixnum_mult(void)
@@ -181,6 +187,7 @@ static void fixnum_mult(void)
 	value_t v2 = POP();
 
 	PUSH(mk_fixnum(as_fixnum(v2) * as_fixnum(v1)));
+	inc_pc();
 }
 
 static void fixnum_div(void)
@@ -189,6 +196,7 @@ static void fixnum_div(void)
 	value_t v2 = POP();
 
 	PUSH(mk_fixnum(as_fixnum(v2) / as_fixnum(v1)));
+	inc_pc();
 }
 
 static void narray(void)
@@ -201,6 +209,7 @@ static void narray(void)
 
 	array_reverse(a);
 	PUSH(mk_ref(a));
+	inc_pc();
 }
 
 static void each(void)
@@ -223,6 +232,7 @@ static void each(void)
 		computation = array_concat(computation, as_ref(q));
 	}
 
+	inc_pc();
 	push_call(computation);
 }
 
@@ -230,12 +240,14 @@ static void _push(void)
 {
 	struct array *a = as_ref(POP_TYPE(ARRAY));
 	array_push(a, POP());
+	inc_pc();
 }
 
 static void _pop(void)
 {
 	struct array *a = as_ref(POP_TYPE(ARRAY));
 	PUSH(array_pop(a));
+	inc_pc();
 }
 
 static void map(void)
@@ -261,6 +273,7 @@ static void map(void)
 	computation = array_push(computation, mk_fixnum(ary->nr_elts));
 	computation = array_push(computation, mk_word_cstr("narray"));
 
+	inc_pc();
 	push_call(computation);
 }
 
@@ -274,6 +287,7 @@ static void choice(void)
 		PUSH(f);
 	else
 		PUSH(t);
+	inc_pc();
 }
 
 static void mk_tuple(void)
@@ -294,17 +308,20 @@ static void mk_tuple(void)
 		POP();
 
 	PUSH(r);
+	inc_pc();
 }
 
 static void mk_namespace(void)
 {
 	struct namespace *n = namespace_create(NULL);
 	PUSH(mk_ref(n));
+	inc_pc();
 }
 
 static void namestack_star(void)
 {
 	PUSH(mk_ref(global_vm->current_ns));
+	inc_pc();
 }
 
 static void namespace_get(void)
@@ -316,6 +333,7 @@ static void namespace_get(void)
 		PUSH(v);
 	else
 		PUSH(mk_false());
+	inc_pc();
 }
 
 static void namespace_set(void)
@@ -323,6 +341,7 @@ static void namespace_set(void)
 	struct string *k = as_ref(POP_TYPE(SYMBOL));
 	value_t v = POP();
 	namespace_insert(global_vm->current_ns, k, v);
+	inc_pc();
 }
 
 static void namespace_push(void)
@@ -330,6 +349,7 @@ static void namespace_push(void)
 	struct namespace *n = as_ref(POP_TYPE(NAMESPACE));
 	n->parent = global_vm->current_ns;
 	global_vm->current_ns = n;
+	inc_pc();
 }
 
 static void namespace_pop(void)
@@ -337,6 +357,7 @@ static void namespace_pop(void)
 	if (!global_vm->current_ns->parent)
 		error("cannot remove global namespace");
 	global_vm->current_ns = global_vm->current_ns->parent;
+	inc_pc();
 }
 
 static void throw_error(void)
@@ -357,6 +378,7 @@ static void rethrow_error(void)
 static void catch_stack(void)
 {
 	PUSH(mk_ref(global_vm->k->catch_stack));
+	inc_pc();
 }
 
 static bool ll_eq(value_t v1, value_t v2)
@@ -420,6 +442,8 @@ static void eq(void)
 		PUSH(mk_true());
 	else
 		PUSH(mk_false());
+
+	inc_pc();
 }
 
 void def_basic_primitives(struct vm *vm)

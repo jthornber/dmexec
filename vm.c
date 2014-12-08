@@ -238,6 +238,64 @@ void print_value(FILE *stream, value_t v)
 	}
 }
 
+static void red(FILE *stream)
+{
+	fprintf(stream, "\x1b[31m");
+}
+
+static void green(FILE *stream)
+{
+	fprintf(stream, "\x1b[32m");
+}
+
+static void yellow(FILE *stream)
+{
+	fprintf(stream, "\x1b[33m");
+}
+
+static void white(FILE *stream)
+{
+	fprintf(stream, "\x1b[37m");
+}
+
+static void print_stack(FILE *stream, struct vm *vm, struct array *a)
+{
+	unsigned i;
+
+	fprintf(stream, "\n--- Data stack:\n");
+	for (i = 0; i < a->nr_elts; i++) {
+		print_value(stream, array_get(a, i));
+		fprintf(stream, "\n");
+	}
+}
+
+static void print_continuation(FILE *stream, struct continuation *k)
+{
+	unsigned f, i;
+
+	print_stack(stream, global_vm, k->data_stack);
+
+	fprintf(stream, "\n--- Call stack:\n");
+	for (f = 0; f < k->call_stack->nr_elts; f++) {
+		struct code_position *cp = as_ref(array_get(k->call_stack, f));
+
+		green(stream);
+		for (i = 0; i < cp->code->nr_elts; i++) {
+			if (cp->position == i)
+				red(stream);
+
+			print_value(stream, array_get(cp->code, i));
+
+			if (cp->position == i)
+				yellow(stream);
+
+			fprintf(stream, " ");
+		}
+		white(stream);
+		fprintf(stream, "\n");
+	}
+}
+
 //----------------------------------------------------------------
 // Lexer
 
@@ -385,19 +443,14 @@ void push_call(struct array *code)
 	array_push(global_vm->k->call_stack, mk_ref(pc));
 }
 
-void pop_call(void)
-{
-	array_pop(global_vm->k->call_stack);
-}
-
-static void inc_pc(void)
+void inc_pc(void)
 {
 	struct array *s = global_vm->k->call_stack;
 
 	if (s->nr_elts) {
 		struct code_position *pc = as_type(CODE_POSITION, array_peek(s));
 		if (++pc->position == pc->code->nr_elts)
-			pop_call();
+			array_pop(global_vm->k->call_stack);
 	}
 }
 
@@ -410,11 +463,9 @@ static void eval_value(value_t v)
 
 	switch (get_tag(v)) {
 	case TAG_FIXNUM:
-		PUSH(v);
-		break;
-
 	case TAG_FALSE:
 		PUSH(v);
+		inc_pc();
 		break;
 
 	case TAG_REF:
@@ -436,6 +487,7 @@ static void eval_value(value_t v)
 		case SYMBOL:
 		case FALSE_TYPE:
 			PUSH(v);
+			inc_pc();
 			break;
 
 		case WORD:
@@ -443,11 +495,16 @@ static void eval_value(value_t v)
 			if (namespace_lookup(global_vm->current_ns, w, &def)) {
 				switch (get_type(def)) {
 				case PRIMITIVE:
+					/*
+					 * Primitives are responsible for
+					 * incrementing the pc themselves
+					 */
 					p = as_ref(def);
 					p->fn();
 					break;
 
 				case QUOT:
+					inc_pc();
 					push_call(as_ref(def));
 					break;
 
@@ -512,7 +569,6 @@ void eval(struct vm *vm, struct array *code)
 		struct array *s = vm->k->call_stack;
 		pc = as_type(CODE_POSITION, array_peek(s));
 		v = array_get(pc->code, pc->position);
-		inc_pc();
 		eval_value(v);
 	}
 }
@@ -546,6 +602,8 @@ void error(const char *format, ...)
 	va_end(ap);
 
 	fprintf(stderr, "\n");
+
+	print_continuation(stderr, global_vm->k);
 	throw();
 }
 
@@ -696,19 +754,6 @@ static void load_file(struct vm *vm, const char *path)
 //----------------------------------------------------------------
 // Top level
 
-static void print_stack(struct vm *vm, value_t s)
-{
-	unsigned i;
-	struct array *a = as_ref(s);
-
-	printf("\n--- Data stack:\n");
-	for (i = 0; i < a->nr_elts; i++) {
-		print_value(stdout, array_get(a, i));
-		printf("\n");
-	}
-}
-
-
 /* A static variable for holding the line. */
 static char *line_read = (char *)NULL;
 
@@ -746,7 +791,7 @@ static int repl(struct vm *vm)
 		input.e = buffer + strlen(buffer);
 		global_vm = vm;
 		eval(vm, _read(&input));
-		print_stack(vm, mk_ref(vm->k->data_stack));
+		print_stack(stdout, vm, vm->k->data_stack);
 	}
 
 	return 0;
