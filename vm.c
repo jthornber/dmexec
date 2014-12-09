@@ -309,10 +309,26 @@ static void step_input(struct string *in)
 	in->b++;
 }
 
+/*
+ * space = whitespace | comment
+ * whitespace = (' ' | <tab>)+
+ * comment = '#' [^\n]*
+ */
 static void consume_space(struct string *in)
 {
-	while (more_input(in) && isspace(*in->b))
-		step_input(in);
+	while (more_input(in)) {
+		if (*in->b == '#') {
+			do {
+				step_input(in);
+			} while (more_input(in) && *in->b != '\n');
+
+		} else if (isspace(*in->b)) {
+			do {
+				step_input(in);
+			} while (more_input(in) && isspace(*in->b));
+		} else
+			return;
+	}
 }
 
 static bool scan_fixnum(struct string *in, struct token *result)
