@@ -231,13 +231,13 @@ static void status_cmd(unsigned flags)
 	for (unsigned i = 0; i < ctl->target_count; i++) {
 		struct array *target = array_create();
 
-		array_push(target, mk_fixnum(spec->length));
-		array_push(target, mk_ref(string_clone_cstr(spec->target_type)));
-		array_push(target, mk_ref(string_clone_cstr((char *) (spec + 1))));
+		target = array_push(target, mk_fixnum(spec->length));
+		target = array_push(target, mk_ref(string_clone_cstr(spec->target_type)));
+		target = array_push(target, mk_ref(string_clone_cstr((char *) (spec + 1))));
 
 		// FIXME: no bounds checking
 		spec = (struct dm_target_spec *) (spec_start + spec->next);
-		array_push(table, mk_ref(target));
+		table = array_push(table, mk_ref(target));
 	}
 
 	PUSH(mk_ref(table));

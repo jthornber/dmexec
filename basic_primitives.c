@@ -57,9 +57,9 @@ static void curry(void)
 
 	// FIXME: it would be nice to use array_unshift
 	new_q = quot_create();
-	array_push(new_q, obj);
+	new_q = array_push(new_q, obj);
 	for (i = 0; i < a->nr_elts; i++)
-		array_push(new_q, array_get(a, i));
+		new_q = array_push(new_q, array_get(a, i));
 	PUSH(mk_ref(new_q));
 	inc_pc();
 }
@@ -239,7 +239,7 @@ static void each(void)
 static void _push(void)
 {
 	struct array *a = as_ref(POP_TYPE(ARRAY));
-	array_push(a, POP());
+	array_push(a, POP());	/* FIXME: does the forward ptr handle resizing ok? */
 	inc_pc();
 }
 
@@ -299,10 +299,10 @@ static void mk_tuple(void)
 	value_t r = mk_ref(a);
 
 	a->nr_elts = count + 1;
-	array_push(a, name);
+	a = array_push(a, name);
 
 	for (i = 0; i < count; i++)
-		array_push(a, PEEKN(i));
+		a = array_push(a, PEEKN(i));
 
 	for (i = 0; i < count; i++)
 		POP();

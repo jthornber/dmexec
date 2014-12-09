@@ -61,7 +61,7 @@ extern struct vm *global_vm;
 typedef void (*prim_fn)(void);
 
 static inline void PUSH(value_t v) {
-	array_push(global_vm->k->data_stack, v);
+	global_vm->k->data_stack = array_push(global_vm->k->data_stack, v);
 }
 
 static inline value_t POP() {

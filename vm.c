@@ -440,7 +440,7 @@ void push_call(struct array *code)
 	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
 	pc->code = code;
 	pc->position = 0;
-	array_push(global_vm->k->call_stack, mk_ref(pc));
+	global_vm->k->call_stack = array_push(global_vm->k->call_stack, mk_ref(pc));
 }
 
 void inc_pc(void)
@@ -558,7 +558,7 @@ void eval(struct vm *vm, struct array *code)
 
 	// We push a continuation on the exception stack before the code
 	// gets pushed.
-	array_push(vm->k->catch_stack, mk_ref(cc(vm)));
+	vm->k->catch_stack = array_push(vm->k->catch_stack, mk_ref(cc(vm)));
 	push_call(code);
 	do
 		r = setjmp(vm->eval_loop);
