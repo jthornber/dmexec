@@ -95,6 +95,7 @@ value_t mk_quot(void)
 
 //----------------------------------------------------------------
 // Printing values
+static void print_continuation(FILE *stream, struct continuation *k);
 
 void print_string(FILE *stream, struct string *str)
 {
@@ -219,7 +220,7 @@ void print_value(FILE *stream, value_t v)
 			break;
 
 		case CONTINUATION:
-			fprintf(stream, "~continuation~");
+			print_continuation(stream, v.ptr);
 			break;
 
 		case FIXNUM:
@@ -556,9 +557,14 @@ struct continuation *cc(struct vm *vm)
 {
 	struct continuation *k = alloc(CONTINUATION, sizeof(*k));
 
+	// Shallow copy only, users need to be aware of this
 	k->data_stack = clone(vm->k->data_stack);
-	k->call_stack = clone(vm->k->call_stack);
-	k->catch_stack = clone(vm->k->catch_stack);
+
+	// Deep copy is crucial, otherwise the code_positions will change
+	k->call_stack = array_deep_clone(vm->k->call_stack);
+
+	// FIXME: I'm worried we need deeper copy
+	k->catch_stack = array_deep_clone(vm->k->catch_stack);
 
 	return k;
 }
@@ -731,13 +737,13 @@ static struct array *_read(struct string *str)
 {
 	value_t v;
 	struct string_source in;
-	value_t a = mk_ref(array_create());
+	struct array *a = array_create();
 
 	in.in = *str;
 	while (string_next_value(&in, &v))
-		array_push(as_ref(a), v);
+		a = array_push(a, v);
 
-	return as_ref(a);
+	return a;
 }
 
 static void load_file(struct vm *vm, const char *path)

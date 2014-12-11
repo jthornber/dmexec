@@ -13,6 +13,9 @@ struct array {
 struct array *array_create(void);
 struct array *quot_create(void);
 
+// Clones the values (but no deeper)
+struct array *array_deep_clone(struct array *a);
+
 struct array *array_resize(struct array *old, unsigned new_nr_alloc);
 
 value_t array_get(struct array *a, unsigned i);

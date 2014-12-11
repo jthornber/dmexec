@@ -27,6 +27,17 @@ struct array *quot_create(void)
 	return q;
 }
 
+struct array *array_deep_clone(struct array *a)
+{
+	unsigned i;
+	struct array *copy = clone(a);
+
+	for (i = 0; i < a->nr_elts; i++)
+		array_set(copy, i, clone_value(array_get(a, i)));
+
+	return copy;
+}
+
 static inline value_t *elt_ptr(struct array *a, unsigned i)
 {
 	return ((value_t *) (a + 1)) + i;

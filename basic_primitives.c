@@ -33,8 +33,8 @@ static void call(void)
 
 static void current_continuation(void)
 {
-	PUSH(mk_ref(cc(global_vm)));
 	inc_pc();
+	PUSH(mk_ref(cc(global_vm)));
 }
 
 static void continue_with(void)

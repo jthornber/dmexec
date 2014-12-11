@@ -1,7 +1,10 @@
+# This is a comment
 : square dup * ;
+
 
 : neg 0 swap - ;
 
+# Simple stack combinators
 : drop 1 ndrop ;
 : 2drop 2 ndrop ;
 : 3drop 3 ndrop ;
