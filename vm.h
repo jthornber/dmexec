@@ -14,11 +14,11 @@
 
 /*----------------------------------------------------------------*/
 
-struct code_position {
+typedef struct {
 	struct list_head list;
 	struct array *code;
 	unsigned position;
-};
+} CodePosition;
 
 enum token_type {
 	TOK_FIXNUM,

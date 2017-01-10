@@ -278,7 +278,7 @@ static void print_continuation(FILE *stream, struct continuation *k)
 
 	fprintf(stream, "\n--- Call stack:\n");
 	for (f = 0; f < k->call_stack->nr_elts; f++) {
-		struct code_position *cp = as_ref(array_get(k->call_stack, f));
+		CodePosition *cp = as_ref(array_get(k->call_stack, f));
 
 		green(stream);
 		for (i = 0; i < cp->code->nr_elts; i++) {
@@ -454,7 +454,7 @@ static void def_word(struct string *w, struct array *body)
 
 void push_call(struct array *code)
 {
-	struct code_position *pc = zalloc(CODE_POSITION, sizeof(*pc));
+	CodePosition *pc = zalloc(CODE_POSITION, sizeof(*pc));
 	pc->code = code;
 	pc->position = 0;
 	global_vm->k->call_stack = array_push(global_vm->k->call_stack, mk_ref(pc));
@@ -465,7 +465,7 @@ void inc_pc(void)
 	struct array *s = global_vm->k->call_stack;
 
 	if (s->nr_elts) {
-		struct code_position *pc = as_type(CODE_POSITION, array_peek(s));
+		CodePosition *pc = as_type(CODE_POSITION, array_peek(s));
 		if (++pc->position == pc->code->nr_elts)
 			array_pop(global_vm->k->call_stack);
 	}
@@ -573,7 +573,7 @@ void eval(struct vm *vm, struct array *code)
 {
 	int r;
 	value_t v;
-	struct code_position *pc;
+	CodePosition *pc;
 
 	if (!code->nr_elts)
 		return;
