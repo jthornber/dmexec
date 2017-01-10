@@ -4,7 +4,7 @@ PROGRAMS=\
 .PHONEY: all
 all: $(PROGRAMS)
 
-V=@
+V=
 RM:=rm -f
 CC:=gcc
 CFLAGS=\
@@ -51,6 +51,6 @@ clean:
 
 dmexec: $(OBJECTS)
 	@echo "    [LD]  $@"
-	$(V) $(CC) $(CFLAGS) $(LIBS) -o $@ $+
+	$(V) $(CC) $(CFLAGS) -o $@ $+ $(LIBS)
 
 -include $(DEPENDS)

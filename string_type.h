@@ -3,23 +3,23 @@
 
 //----------------------------------------------------------------
 
-struct string {
+typedef struct {
 	char *b;
 	char *e;
-};
+} String;
 
-void string_tmp(char *cstr, struct string *str);
+void string_tmp(char *cstr, String *str);
 
-static inline unsigned string_len(struct string *str)
+static inline unsigned string_len(String *str)
 {
 	return str->e - str->b;
 }
 
-struct string *string_clone(struct string *str);
-struct string *string_clone_cstr(char *str);
+String *string_clone(String *str);
+String *string_clone_cstr(char *str);
 
-int string_cmp(struct string *lhs, struct string *rhs);
-int string_cmp_cstr(struct string *lhs, char *rhs);
+int string_cmp(String *lhs, String *rhs);
+int string_cmp_cstr(String *lhs, char *rhs);
 
 //----------------------------------------------------------------
 

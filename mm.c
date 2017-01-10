@@ -14,17 +14,17 @@
 
 // FIXME: use the valgrind api to allow it to check for accesses to garbage
 
-static struct memory_stats memory_stats_;
+static MemoryStats memory_stats_;
 
 static void out_of_memory(void)
 {
 	error("out of memory");
 }
 
-void *alloc(enum object_type type, size_t s)
+void *alloc(ObjectType type, size_t s)
 {
-	size_t len = s + sizeof(struct header);
-	struct header *h = malloc(len);
+	size_t len = s + sizeof(Header);
+	Header *h = malloc(len);
 
 	if (!h)
 		out_of_memory();
@@ -34,24 +34,24 @@ void *alloc(enum object_type type, size_t s)
 	h->magic = HEADER_MAGIC;
 
 	memory_stats_.total_allocated += len;
-	return ((char *) (h + 1));
+	return h + 1;
 }
 
-void *zalloc(enum object_type type, size_t s)
+void *zalloc(ObjectType type, size_t s)
 {
 	void *ptr = alloc(type, s);
 	memset(ptr, 0, s);
 	return ptr;
 }
 
-static struct header *obj_to_header(void *obj)
+static Header *obj_to_header(void *obj)
 {
-	return ((struct header *) obj) - 1;
+	return ((Header *) obj) - 1;
 }
 
 static void *follow_fwd_ptrs(void *obj)
 {
-	struct header *h = obj_to_header(obj);
+	Header *h = obj_to_header(obj);
 
 	while (h->type == FORWARD) {
 		obj = *((void **) (h + 1));
@@ -64,14 +64,14 @@ static void *follow_fwd_ptrs(void *obj)
 void *clone(void *obj_)
 {
 	void *obj = follow_fwd_ptrs(obj_);
-	struct header *h = obj_to_header(obj);
+	Header *h = obj_to_header(obj);
 	void *new = alloc(h->type, h->size);
 
 	memcpy(new, obj, h->size);
 	return new;
 }
 
-void *as_ref(value_t v)
+void *as_ref(Value v)
 {
 	void *obj = v.ptr;
 	if (get_tag(v) != TAG_REF)
@@ -85,22 +85,22 @@ void replace_obj(void *old_obj, void *new_obj)
 	*((void **) old_obj) = new_obj;
 }
 
-void set_obj_type(void *obj, enum object_type t)
+void set_obj_type(void *obj, ObjectType t)
 {
-	struct header *h = obj_to_header(obj);
+	Header *h = obj_to_header(obj);
 	h->type = t;
 }
 
-enum object_type get_obj_type(void *obj)
+ObjectType get_obj_type(void *obj)
 {
 	return obj_to_header(obj)->type;
 }
 
 //----------------------------------------------------------------
 
-struct header *get_header(value_t v)
+Header *get_header(Value v)
 {
-	struct header *h = obj_to_header(as_ref(v));
+	Header *h = obj_to_header(as_ref(v));
 	if (h->magic != HEADER_MAGIC) {
 		fprintf(stderr, "memory corruption detected.");
 		abort();
@@ -108,7 +108,7 @@ struct header *get_header(value_t v)
 	return h;
 };
 
-enum object_type get_type(value_t v)
+ObjectType get_type(Value v)
 {
 	if (get_tag(v) == TAG_FIXNUM)
 		return FIXNUM;
@@ -124,60 +124,60 @@ enum object_type get_type(value_t v)
 //
 // The bottom 2 bits are used for tagging.
 
-enum tag get_tag(value_t v)
+Tag get_tag(Value v)
 {
 	return v.i & 0x3;
 }
 
-value_t mk_fixnum(int i)
+Value mk_fixnum(int i)
 {
-	value_t v;
+	Value v;
 	v.i = (i << 2) | TAG_FIXNUM;
 	return v;
 }
 
-int as_fixnum(value_t v)
+int as_fixnum(Value v)
 {
 	if (get_tag(v) != TAG_FIXNUM)
 		error("type error: expected fixnum.");
 	return v.i >> 2;
 }
 
-value_t mk_ref(void *ptr)
+Value mk_ref(void *ptr)
 {
-	value_t v;
+	Value v;
 	v.ptr = ptr;
 	return v;
 }
 
-value_t clone_value(value_t v)
+Value clone_value(Value v)
 {
 	return mk_ref(clone(as_ref(v)));
 }
 
-value_t mk_false(void)
+Value mk_false(void)
 {
-	value_t v;
+	Value v;
 	v.i = TAG_FALSE;
 	return v;
 }
 
 // FIXME: move else where, and factor out common code with mk-symbol
-value_t mk_true(void)
+Value mk_true(void)
 {
-	struct string str, *copy;
+	String str, *copy;
 	string_tmp(":true", &str);
 	copy = string_clone(&str);
 	set_obj_type(copy, SYMBOL);
 	return mk_ref(copy);
 }
 
-bool is_false(value_t v)
+bool is_false(Value v)
 {
 	return v.i == TAG_FALSE;
 }
 
-void *as_type(enum object_type t, value_t v)
+void *as_type(ObjectType t, Value v)
 {
 	if (get_type(v) != t)
 		error("type error: expected type %d.", t);
@@ -187,7 +187,7 @@ void *as_type(enum object_type t, value_t v)
 
 //----------------------------------------------------------------
 
-struct memory_stats *get_memory_stats()
+MemoryStats *get_memory_stats()
 {
 	return &memory_stats_;
 }

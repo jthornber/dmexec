@@ -17,7 +17,7 @@ static void clear(void)
 
 static void call(void)
 {
-	value_t callable = POP();
+	Value callable = POP();
 
 	switch (get_type(callable)) {
 	case QUOT:
@@ -39,8 +39,8 @@ static void current_continuation(void)
 
 static void continue_with(void)
 {
-	value_t k = POP_TYPE(CONTINUATION);
-	value_t obj = POP();
+	Value k = POP_TYPE(CONTINUATION);
+	Value obj = POP();
 
 	global_vm->k = as_ref(k);
 	PUSH(obj);
@@ -49,8 +49,8 @@ static void continue_with(void)
 
 static void curry(void)
 {
-	value_t q = POP();
-	value_t obj = POP();
+	Value q = POP();
+	Value obj = POP();
 	struct array *a = as_ref(q);
 	struct array *new_q;
 	unsigned i;
@@ -66,7 +66,7 @@ static void curry(void)
 
 static void dot(void)
 {
-	value_t v = POP();
+	Value v = POP();
 	print_value(stdout, v);
 	printf("\n");
 	inc_pc();
@@ -75,7 +75,7 @@ static void dot(void)
 static void ndrop(void)
 {
 	unsigned i;
-	value_t v = POP();
+	Value v = POP();
 
 	for (i = as_fixnum(v); i; i--)
 		POP();
@@ -85,8 +85,8 @@ static void ndrop(void)
 static void nnip(void)
 {
 	unsigned i;
-	value_t v = POP();
-	value_t restore = POP();
+	Value v = POP();
+	Value restore = POP();
 
 	for (i = as_fixnum(v); i; i--)
 		POP();
@@ -97,15 +97,15 @@ static void nnip(void)
 
 static void _dup(void)
 {
-	value_t v = PEEK();
+	Value v = PEEK();
 	PUSH(v);
 	inc_pc();
 }
 
 static void _dup2(void)
 {
-	value_t y = PEEK();
-	value_t x = PEEKN(1);
+	Value y = PEEK();
+	Value x = PEEKN(1);
 	PUSH(x);
 	PUSH(y);
 	inc_pc();
@@ -113,9 +113,9 @@ static void _dup2(void)
 
 static void _dup3(void)
 {
-	value_t z = PEEK();
-	value_t y = PEEKN(1);
-	value_t x = PEEKN(2);
+	Value z = PEEK();
+	Value y = PEEKN(1);
+	Value x = PEEKN(2);
 
 	PUSH(x);
 	PUSH(y);
@@ -144,8 +144,8 @@ static void pick(void)
 
 static void swap(void)
 {
-	value_t v1 = POP();
-	value_t v2 = POP();
+	Value v1 = POP();
+	Value v2 = POP();
 	PUSH(v1);
 	PUSH(v2);
 	inc_pc();
@@ -153,10 +153,10 @@ static void swap(void)
 
 static void dip(void)
 {
-	value_t q = POP();
-	value_t x = POP();
+	Value q = POP();
+	Value x = POP();
 
-	value_t after = mk_quot();
+	Value after = mk_quot();
 	array_push(as_ref(after), x);
 	inc_pc();
 	push_call(as_ref(after));
@@ -165,8 +165,8 @@ static void dip(void)
 
 static void fixnum_add(void)
 {
-	value_t v1 = POP();
-	value_t v2 = POP();
+	Value v1 = POP();
+	Value v2 = POP();
 
 	PUSH(mk_fixnum(as_fixnum(v1) + as_fixnum(v2)));
 	inc_pc();
@@ -174,8 +174,8 @@ static void fixnum_add(void)
 
 static void fixnum_sub(void)
 {
-	value_t v1 = POP();
-	value_t v2 = POP();
+	Value v1 = POP();
+	Value v2 = POP();
 
 	PUSH(mk_fixnum(as_fixnum(v2) - as_fixnum(v1)));
 	inc_pc();
@@ -183,8 +183,8 @@ static void fixnum_sub(void)
 
 static void fixnum_mult(void)
 {
-	value_t v1 = POP();
-	value_t v2 = POP();
+	Value v1 = POP();
+	Value v2 = POP();
 
 	PUSH(mk_fixnum(as_fixnum(v2) * as_fixnum(v1)));
 	inc_pc();
@@ -192,8 +192,8 @@ static void fixnum_mult(void)
 
 static void fixnum_div(void)
 {
-	value_t v1 = POP();
-	value_t v2 = POP();
+	Value v1 = POP();
+	Value v2 = POP();
 
 	PUSH(mk_fixnum(as_fixnum(v2) / as_fixnum(v1)));
 	inc_pc();
@@ -214,8 +214,8 @@ static void narray(void)
 
 static void each(void)
 {
-	value_t q = POP();
-	value_t a = POP();
+	Value q = POP();
+	Value a = POP();
 	struct array *ary, *computation = quot_create();
 	unsigned i;
 
@@ -252,8 +252,8 @@ static void _pop(void)
 
 static void map(void)
 {
-	value_t q = POP();
-	value_t a = POP();
+	Value q = POP();
+	Value a = POP();
 	struct array *ary, *computation = quot_create();
 	unsigned i;
 
@@ -279,9 +279,9 @@ static void map(void)
 
 static void choice(void)
 {
-	value_t f = POP();
-	value_t t = POP();
-	value_t p = POP();
+	Value f = POP();
+	Value t = POP();
+	Value p = POP();
 
 	if (is_false(p))
 		PUSH(f);
@@ -293,10 +293,10 @@ static void choice(void)
 static void mk_tuple(void)
 {
 	unsigned i;
-	value_t name = POP();
+	Value name = POP();
 	int count = as_fixnum(POP());
 	struct array *a = alloc(TUPLE, sizeof(*a));
-	value_t r = mk_ref(a);
+	Value r = mk_ref(a);
 
 	a->nr_elts = count + 1;
 	a = array_push(a, name);
@@ -326,8 +326,8 @@ static void namestack_star(void)
 
 static void namespace_get(void)
 {
-	value_t v;
-	struct string *k = as_ref(POP_TYPE(SYMBOL));
+	Value v;
+	String *k = as_ref(POP_TYPE(SYMBOL));
 
 	if (namespace_lookup(global_vm->current_ns, k, &v))
 		PUSH(v);
@@ -338,8 +338,8 @@ static void namespace_get(void)
 
 static void namespace_set(void)
 {
-	struct string *k = as_ref(POP_TYPE(SYMBOL));
-	value_t v = POP();
+	String *k = as_ref(POP_TYPE(SYMBOL));
+	Value v = POP();
 	namespace_insert(global_vm->current_ns, k, v);
 	inc_pc();
 }
@@ -362,7 +362,7 @@ static void namespace_pop(void)
 
 static void throw_error(void)
 {
-	struct string *msg = as_ref(POP_TYPE(STRING));
+	String *msg = as_ref(POP_TYPE(STRING));
 	fprintf(stderr, "throwing: ");
 	print_string(stderr, msg);
 	fprintf(stderr, "\n");
@@ -381,9 +381,9 @@ static void catch_stack(void)
 	inc_pc();
 }
 
-static bool ll_eq(value_t v1, value_t v2)
+static bool ll_eq(Value v1, Value v2)
 {
-	enum object_type t = get_type(v1);
+	ObjectType t = get_type(v1);
 
 	if (get_type(v2) != t)
 		return false;
@@ -435,8 +435,8 @@ static bool ll_eq(value_t v1, value_t v2)
 
 static void eq(void)
 {
-	value_t v1 = POP();
-	value_t v2 = POP();
+	Value v1 = POP();
+	Value v2 = POP();
 
 	if (ll_eq(v1, v2))
 		PUSH(mk_true());
@@ -446,7 +446,7 @@ static void eq(void)
 	inc_pc();
 }
 
-void def_basic_primitives(struct vm *vm)
+void def_basic_primitives(VM *vm)
 {
 	def_primitive(vm, "eq", eq);
 

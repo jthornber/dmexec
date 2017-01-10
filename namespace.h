@@ -11,8 +11,8 @@
 
 struct namespace_entry {
 	struct node node;
-	struct string *key;
-	value_t value;
+	String *key;
+	Value value;
 };
 
 struct namespace {
@@ -21,10 +21,10 @@ struct namespace {
 };
 
 struct namespace *namespace_create(struct namespace *parent);
-bool namespace_lookup(struct namespace *ns, struct string *k, value_t *result);
-void namespace_insert(struct namespace *ns, struct string *k, value_t v);
+bool namespace_lookup(struct namespace *ns, String *k, Value *result);
+void namespace_insert(struct namespace *ns, String *k, Value v);
 void namespace_visit(struct namespace *ns,
-		     void (*callback)(void *, struct string *, value_t),
+		     void (*callback)(void *, String *, Value),
 		     void * ctxt);
 
 //----------------------------------------------------------------

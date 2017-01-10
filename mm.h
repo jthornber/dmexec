@@ -5,7 +5,7 @@
 
 //----------------------------------------------------------------
 
-enum object_type {
+typedef enum {
 	FORWARD,
 	NAMESPACE,
 	NAMESPACE_ENTRY,
@@ -23,59 +23,59 @@ enum object_type {
 	/* these are always tagged immediate values */
 	FIXNUM,
 	FALSE_TYPE
-};
+} ObjectType;
 
-struct header {
-	enum object_type type;
+typedef struct {
+	ObjectType type;
 	unsigned size; 		/* in bytes, we always round to a 4 byte boundary */
 	unsigned magic;
-};
+} Header;
 
-void *alloc(enum object_type type, size_t s);
-void *zalloc(enum object_type type, size_t s);
+void *alloc(ObjectType type, size_t s);
+void *zalloc(ObjectType type, size_t s);
 void *clone(void *obj);
 void replace_obj(void *old_obj, void *new_obj);
 
-void set_obj_type(void *obj, enum object_type t);
-enum object_type get_obj_type(void *obj);
+void set_obj_type(void *obj, ObjectType t);
+ObjectType get_obj_type(void *obj);
 
-struct memory_stats {
+typedef struct {
 	size_t total_allocated;
 	size_t total_collected;
 	size_t current_allocated;
 	size_t max_allocated;
 	unsigned nr_gcs;
-};
+} MemoryStats;
 
-struct memory_stats *get_memory_stats(void);
+MemoryStats *get_memory_stats(void);
 
 //----------------------------------------------------------------
 
-enum tag {
+typedef enum {
 	TAG_REF = 0,
 	TAG_FIXNUM = 1,
 	TAG_FALSE
-};
+} Tag;
 
 typedef union value {
 	void *ptr;
 	int32_t i;
-} value_t;
+} Value;
 
-value_t mk_ref(void *ptr);
-value_t clone_value(value_t v);
+Value mk_ref(void *ptr);
+Value clone_value(Value v);
 
-// functions that take a value_t automatically chase forward ptrs.
-void *as_ref(value_t v);
-struct header *get_header(value_t v);
-enum object_type get_type(value_t v);
+// functions that take a Value automatically chase forward ptrs.
+void *as_ref(Value v);
+Header *get_header(Value v);
+ObjectType get_type(Value v);
 
-enum tag get_tag(value_t v);
-value_t mk_false(void);
-value_t mk_true(void);
+Tag get_tag(Value v);
+Value mk_false(void);
+Value mk_true(void);
 
-int as_fixnum(value_t v);
-void *as_type(enum object_type t, value_t v);
+int as_fixnum(Value v);
+void *as_type(ObjectType t, Value v);
 
 //----------------------------------------------------------------
 

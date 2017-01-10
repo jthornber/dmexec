@@ -8,16 +8,16 @@
 
 //----------------------------------------------------------------
 
-void string_tmp(char *cstr, struct string *str)
+void string_tmp(char *cstr, String *str)
 {
 	str->b = cstr;
 	str->e = cstr + strlen(cstr);
 }
 
-struct string *string_clone(struct string *str)
+String *string_clone(String *str)
 {
 	size_t len = str->e - str->b;
-	struct string *copy = alloc(STRING, sizeof(*copy) + len);
+	String *copy = alloc(STRING, sizeof(*copy) + len);
 	copy->b = (char *) (copy + 1);
 	copy->e = copy->b + len;
 	memcpy(copy->b, str->b, len);
@@ -25,14 +25,14 @@ struct string *string_clone(struct string *str)
 	return copy;
 }
 
-struct string *string_clone_cstr(char *str)
+String *string_clone_cstr(char *str)
 {
-	struct string tmp;
+	String tmp;
 	string_tmp(str, &tmp);
 	return string_clone(&tmp);
 }
 
-int string_cmp(struct string *lhs, struct string *rhs)
+int string_cmp(String *lhs, String *rhs)
 {
 	size_t lhs_len = string_len(lhs);
 	size_t rhs_len = string_len(rhs);
@@ -50,9 +50,9 @@ int string_cmp(struct string *lhs, struct string *rhs)
 	return 0;
 }
 
-int string_cmp_cstr(struct string *lhs, char *rhs)
+int string_cmp_cstr(String *lhs, char *rhs)
 {
-	struct string tmp;
+	String tmp;
 	string_tmp(rhs, &tmp);
 	return string_cmp(lhs, &tmp);
 }

@@ -16,7 +16,7 @@
 // FIXME: any resources, such as the fd for the ctl file must be cleaned up
 // when an error is thrown.  Opaque 'finalisable/resource' type.
 
-static value_t mk_c_string(char *str)
+static Value mk_c_string(char *str)
 {
 	return mk_ref(string_clone_cstr(str));
 }
@@ -79,7 +79,7 @@ static void dm_list_devices(void)
 	char buffer[8192];	/* FIXME: what if this buffer isn't big enough? */
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
 	struct dm_name_list *nl;
-	value_t results = mk_ref(array_create());
+	Value results = mk_ref(array_create());
 
 	init_ctl(ctl, sizeof(buffer));
 	dm_ioctl(DM_LIST_DEVICES, ctl);
@@ -106,7 +106,7 @@ static void dm_list_devices(void)
 	inc_pc();
 }
 
-static void copy_param(const char *param, char *dest, size_t max, struct string *src)
+static void copy_param(const char *param, char *dest, size_t max, String *src)
 {
 	if (string_len(src) >= max)
 		error("<%s> string too long for param destination", param);
@@ -117,8 +117,8 @@ static void copy_param(const char *param, char *dest, size_t max, struct string 
 static void dm_create(void)
 {
 	struct dm_ioctl ctl;
-	struct string *uuid = as_type(STRING, POP());
-	struct string *name = as_type(STRING, POP());
+	String *uuid = as_type(STRING, POP());
+	String *name = as_type(STRING, POP());
 
 	init_ctl(&ctl, sizeof(ctl));
 	copy_param("name", ctl.name, DM_NAME_LEN, name);
@@ -130,7 +130,7 @@ static void dm_create(void)
 static void dev_cmd(int request, unsigned flags)
 {
 	struct dm_ioctl ctl;
-	struct string *name = as_type(STRING, POP());
+	String *name = as_type(STRING, POP());
 
 	init_ctl(&ctl, sizeof(ctl));
 	ctl.flags = flags;
@@ -163,7 +163,7 @@ static void dm_load(void)
 {
 	char buffer[8192];
 	struct array *table = as_type(ARRAY, POP());
-	struct string *name = as_type(STRING, POP());
+	String *name = as_type(STRING, POP());
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
 	struct dm_target_spec *spec;
 	uint64_t current_sector = 0;
@@ -185,8 +185,8 @@ static void dm_load(void)
 			// followed by target type and target ctr string.  Start
 			// sectors are inferred.
 			int len = as_fixnum(array_get(target, 0));
-			struct string *tt = as_type(STRING, array_get(target, 1));
-			struct string *target_ctr = as_type(STRING, array_get(target, 2));
+			String *tt = as_type(STRING, array_get(target, 1));
+			String *target_ctr = as_type(STRING, array_get(target, 2));
 
 			spec->sector_start = current_sector;
 			current_sector += len;
@@ -210,7 +210,7 @@ static void dm_load(void)
 static void status_cmd(unsigned flags)
 {
 	char buffer[8192];
-	struct string *name = as_type(STRING, POP());
+	String *name = as_type(STRING, POP());
 	struct array *table = array_create();
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
 	struct dm_target_spec *spec;
@@ -257,9 +257,9 @@ static void dm_status(void)
 static void dm_message()
 {
 	char buffer[8192];
-	struct string *txt = as_type(STRING, POP());
+	String *txt = as_type(STRING, POP());
 	int sector = as_fixnum(POP());
-	struct string *name = as_type(STRING, POP());
+	String *name = as_type(STRING, POP());
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
 	struct dm_target_msg *msg = (struct dm_target_msg *) (ctl + 1);
 
@@ -275,7 +275,7 @@ static void dm_message()
 
 /*----------------------------------------------------------------*/
 
-void def_dm_primitives(struct vm *vm)
+void def_dm_primitives(VM *vm)
 {
 	def_primitive(vm, "dm-version", dm_version);
 	def_primitive(vm, "dm-remove-all", dm_remove_all);

@@ -5,8 +5,8 @@
 
 /*----------------------------------------------------------------*/
 
-void def_basic_primitives(struct vm *vm);
-void def_dm_primitives(struct vm *vm);
+void def_basic_primitives(VM *vm);
+void def_dm_primitives(VM *vm);
 
 /*----------------------------------------------------------------*/
 

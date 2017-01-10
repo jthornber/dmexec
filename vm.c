@@ -20,26 +20,26 @@
 
 //----------------------------------------------------------------
 // Words
-value_t mk_word_like(enum object_type type, struct string *str)
+Value mk_word_like(ObjectType type, String *str)
 {
-	struct string *w = string_clone(str);
+	String *w = string_clone(str);
 	set_obj_type(w, type);
 	return mk_ref(w);
 }
 
-value_t mk_symbol(struct string *str)
+Value mk_symbol(String *str)
 {
 	return mk_word_like(SYMBOL, str);
 }
 
-value_t mk_word(struct string *str)
+Value mk_word(String *str)
 {
 	return mk_word_like(WORD, str);
 }
 
-value_t mk_word_cstr(char *str)
+Value mk_word_cstr(char *str)
 {
-	struct string tmp;
+	String tmp;
 	string_tmp(str, &tmp);
 	return mk_word(&tmp);
 }
@@ -86,7 +86,7 @@ void push_byte(struct byte_array *ba, unsigned b)
 //----------------------------------------------------------------
 // Quotations
 
-value_t mk_quot(void)
+Value mk_quot(void)
 {
 	struct array *a = array_create();
 	set_obj_type(a, QUOT);
@@ -95,9 +95,9 @@ value_t mk_quot(void)
 
 //----------------------------------------------------------------
 // Printing values
-static void print_continuation(FILE *stream, struct continuation *k);
+static void print_continuation(FILE *stream, Continuation *k);
 
-void print_string(FILE *stream, struct string *str)
+void print_string(FILE *stream, String *str)
 {
 	const char *ptr;
 
@@ -137,7 +137,7 @@ static void print_tuple(FILE *stream, struct tuple *t)
 }
 #endif
 
-static void print_word(FILE *stream, struct string *w)
+static void print_word(FILE *stream, String *w)
 {
 	const char *ptr;
 
@@ -145,7 +145,7 @@ static void print_word(FILE *stream, struct string *w)
 		fputc(*ptr, stream);
 }
 
-static void print_namespace_entry(void *ctxt, struct string *k, value_t v)
+static void print_namespace_entry(void *ctxt, String *k, Value v)
 {
 	FILE *stream = ctxt;
 	fprintf(stream, "{ ");
@@ -162,9 +162,9 @@ static void print_namespace(FILE *stream, struct namespace *ns)
 	fprintf(stream, "}");
 }
 
-void print_value(FILE *stream, value_t v)
+void print_value(FILE *stream, Value v)
 {
-	struct header *h;
+	Header *h;
 
 	switch (get_tag(v)) {
 	case TAG_FIXNUM:
@@ -191,7 +191,7 @@ void print_value(FILE *stream, value_t v)
 			break;
 
 		case STRING:
-			print_string(stream, (struct string *) v.ptr);
+			print_string(stream, (String *) v.ptr);
 			break;
 
 		case BYTE_ARRAY:
@@ -259,7 +259,7 @@ static void white(FILE *stream)
 	fprintf(stream, "\x1b[37m");
 }
 
-static void print_stack(FILE *stream, struct vm *vm, struct array *a)
+static void print_stack(FILE *stream, VM *vm, struct array *a)
 {
 	unsigned i;
 
@@ -270,7 +270,7 @@ static void print_stack(FILE *stream, struct vm *vm, struct array *a)
 	}
 }
 
-static void print_continuation(FILE *stream, struct continuation *k)
+static void print_continuation(FILE *stream, Continuation *k)
 {
 	unsigned f, i;
 
@@ -300,12 +300,12 @@ static void print_continuation(FILE *stream, struct continuation *k)
 //----------------------------------------------------------------
 // Lexer
 
-static bool more_input(struct string *in)
+static bool more_input(String *in)
 {
 	return in->b != in->e;
 }
 
-static void step_input(struct string *in)
+static void step_input(String *in)
 {
 	in->b++;
 }
@@ -315,7 +315,7 @@ static void step_input(struct string *in)
  * whitespace = (' ' | <tab>)+
  * comment = '#' [^\n]*
  */
-static void consume_space(struct string *in)
+static void consume_space(String *in)
 {
 	while (more_input(in)) {
 		if (*in->b == '#') {
@@ -332,7 +332,7 @@ static void consume_space(struct string *in)
 	}
 }
 
-static bool scan_fixnum(struct string *in, struct token *result)
+static bool scan_fixnum(String *in, Token *result)
 {
 	int n = 0;
 
@@ -358,7 +358,7 @@ static bool scan_fixnum(struct string *in, struct token *result)
 	return true;
 }
 
-static bool scan_string(struct string *in, struct token *result)
+static bool scan_string(String *in, Token *result)
 {
 	result->type = TOK_STRING;
 	step_input(in);
@@ -378,7 +378,7 @@ static bool scan_string(struct string *in, struct token *result)
 	return true;
 }
 
-static bool scan_word(struct string *in, struct token *result)
+static bool scan_word(String *in, Token *result)
 {
 	result->type = TOK_WORD;
 	result->str.b = in->b;
@@ -390,7 +390,7 @@ static bool scan_word(struct string *in, struct token *result)
 	return true;
 }
 
-static bool scan(struct string *in, struct token *result)
+static bool scan(String *in, Token *result)
 {
 	if (!more_input(in))
 		return false;
@@ -414,7 +414,7 @@ static bool scan(struct string *in, struct token *result)
 // Interpreter
 
 struct primitive {
-	prim_fn fn;
+	PrimFn fn;
 };
 
 struct dynamic_scope {
@@ -422,14 +422,14 @@ struct dynamic_scope {
 	struct list_head definitions;
 };
 
-static void init_continuation(struct continuation *k)
+static void init_continuation(Continuation *k)
 {
 	k->data_stack = array_create();
 	k->call_stack = array_create();
 	k->catch_stack = array_create();
 }
 
-static void init_vm(struct vm *vm)
+static void init_vm(VM *vm)
 {
 	memset(vm, 0, sizeof(*vm));
 	vm->current_ns = namespace_create(NULL);
@@ -437,17 +437,17 @@ static void init_vm(struct vm *vm)
 	init_continuation(vm->k);
 }
 
-void def_primitive(struct vm *vm, char *name, prim_fn fn)
+void def_primitive(VM *vm, char *name, PrimFn fn)
 {
 	struct primitive *p = alloc(PRIMITIVE, sizeof(*p));
-	struct string k;
+	String k;
 
 	string_tmp(name, &k);
 	p->fn = fn;
 	namespace_insert(vm->current_ns, &k, mk_ref(p));
 }
 
-static void def_word(struct string *w, struct array *body)
+static void def_word(String *w, struct array *body)
 {
 	namespace_insert(global_vm->current_ns, w, mk_ref(body));
 }
@@ -471,12 +471,12 @@ void inc_pc(void)
 	}
 }
 
-static void eval_value(value_t v)
+static void eval_value(Value v)
 {
 	struct primitive *p;
-	struct string *w;
-	struct header *h;
-	value_t def;
+	String *w;
+	Header *h;
+	Value def;
 
 	switch (get_tag(v)) {
 	case TAG_FIXNUM:
@@ -551,11 +551,11 @@ static bool more_code(void)
 	return global_vm->k->call_stack->nr_elts > 0;
 }
 
-struct vm *global_vm = NULL;
+VM *global_vm = NULL;
 
-struct continuation *cc(struct vm *vm)
+Continuation *cc(VM *vm)
 {
-	struct continuation *k = alloc(CONTINUATION, sizeof(*k));
+	Continuation *k = alloc(CONTINUATION, sizeof(*k));
 
 	// Shallow copy only, users need to be aware of this
 	k->data_stack = clone(vm->k->data_stack);
@@ -569,10 +569,10 @@ struct continuation *cc(struct vm *vm)
 	return k;
 }
 
-void eval(struct vm *vm, struct array *code)
+void eval(VM *vm, struct array *code)
 {
 	int r;
-	value_t v;
+	Value v;
 	CodePosition *pc;
 
 	if (!code->nr_elts)
@@ -633,15 +633,15 @@ void error(const char *format, ...)
 // String source
 
 struct string_source {
-	struct string in;
-	struct token tok;
+	String in;
+	Token tok;
 };
 
-static bool string_next_value(struct string_source *in, value_t *r);
+static bool string_next_value(struct string_source *in, Value *r);
 
-static bool is_word(char *target, value_t v)
+static bool is_word(char *target, Value v)
 {
-	struct string *w;
+	String *w;
 
 	if (get_type(v) != WORD)
 		return false;
@@ -650,9 +650,9 @@ static bool is_word(char *target, value_t v)
 	return !string_cmp_cstr(w, target);
 }
 
-static bool syntax_quot(struct string_source *ss, value_t *r)
+static bool syntax_quot(struct string_source *ss, Value *r)
 {
-	value_t r2;
+	Value r2;
 
 	*r = mk_quot();
 	while (string_next_value(ss, &r2) && !is_word("]", r2))
@@ -661,9 +661,9 @@ static bool syntax_quot(struct string_source *ss, value_t *r)
 	return true;
 }
 
-static bool syntax_array(struct string_source *ss, value_t *r)
+static bool syntax_array(struct string_source *ss, Value *r)
 {
-	value_t r2;
+	Value r2;
 
 	*r = mk_ref(array_create());
 	while (string_next_value(ss, &r2) && !is_word("}", r2))
@@ -674,7 +674,7 @@ static bool syntax_array(struct string_source *ss, value_t *r)
 
 static void syntax_definition(struct string_source *ss)
 {
-	value_t w, body, v;
+	Value w, body, v;
 
 	if (!string_next_value(ss, &w)) {
 		error("bad definition");
@@ -688,7 +688,7 @@ static void syntax_definition(struct string_source *ss)
 	def_word(as_ref(w), as_ref(body));
 }
 
-static bool string_next_value(struct string_source *ss, value_t *r)
+static bool string_next_value(struct string_source *ss, Value *r)
 {
 	if (!scan(&ss->in, &ss->tok))
 		return false;
@@ -733,9 +733,9 @@ static bool string_next_value(struct string_source *ss, value_t *r)
 	return true;
 }
 
-static struct array *_read(struct string *str)
+static struct array *_read(String *str)
 {
-	value_t v;
+	Value v;
 	struct string_source in;
 	struct array *a = array_create();
 
@@ -746,11 +746,11 @@ static struct array *_read(struct string *str)
 	return a;
 }
 
-static void load_file(struct vm *vm, const char *path)
+static void load_file(VM *vm, const char *path)
 {
 	int fd;
 	struct stat info;
-	struct string input;
+	String input;
 	struct array *code;
 
 	if (stat(path, &info) < 0)
@@ -799,10 +799,10 @@ char *rl_gets ()
 }
 
 // FIXME: this should be written in dm code
-static int repl(struct vm *vm)
+static int repl(VM *vm)
 {
 	char *buffer;
-	struct string input;
+	String input;
 
 	for (;;) {
 		buffer = rl_gets();
@@ -822,7 +822,7 @@ static int repl(struct vm *vm)
 int main(int argc, char **argv)
 {
 	unsigned i;
-	struct vm vm;
+	VM vm;
 
 	init_vm(&vm);
 	def_basic_primitives(&vm);

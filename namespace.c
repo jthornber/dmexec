@@ -17,7 +17,7 @@ static inline struct namespace_entry *to_entry(struct node *n)
 	return container_of(n, struct namespace_entry, node);
 }
 
-static bool lookup_shallow(struct namespace *ns, struct string *k, value_t *result)
+static bool lookup_shallow(struct namespace *ns, String *k, Value *result)
 {
 	int c;
 	struct node *n = ns->root;
@@ -40,7 +40,7 @@ static bool lookup_shallow(struct namespace *ns, struct string *k, value_t *resu
 	return false;
 }
 
-bool namespace_lookup(struct namespace *ns, struct string *k, value_t *result)
+bool namespace_lookup(struct namespace *ns, String *k, Value *result)
 {
 	bool r;
 
@@ -55,7 +55,7 @@ retry:
 	return r;
 }
 
-void namespace_insert(struct namespace *ns, struct string *k, value_t v)
+void namespace_insert(struct namespace *ns, String *k, Value v)
 {
 	int c;
 	struct node **current = &ns->root;
@@ -84,7 +84,7 @@ void namespace_insert(struct namespace *ns, struct string *k, value_t v)
 }
 
 static void visit_node(struct node *n,
-		       void (*callback)(void *, struct string *, value_t),
+		       void (*callback)(void *, String *, Value),
 		       void *ctx)
 {
 	struct namespace_entry *e;
@@ -100,7 +100,7 @@ static void visit_node(struct node *n,
 }
 
 void namespace_visit(struct namespace *ns,
-		     void (*callback)(void *, struct string *, value_t),
+		     void (*callback)(void *, String *, Value),
 		     void *ctx)
 {
 	if (ns->root)
