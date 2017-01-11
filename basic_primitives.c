@@ -51,8 +51,8 @@ static void curry(void)
 {
 	Value q = POP();
 	Value obj = POP();
-	struct array *a = as_ref(q);
-	struct array *new_q;
+	Array *a = as_ref(q);
+	Array *new_q;
 	unsigned i;
 
 	// FIXME: it would be nice to use array_unshift
@@ -202,7 +202,7 @@ static void fixnum_div(void)
 static void narray(void)
 {
 	int n = as_fixnum(POP());
-	struct array *a = array_create();
+	Array *a = array_create();
 
 	for (unsigned i = 0; i < n; i++)
 		a = array_push(a, POP());
@@ -216,7 +216,7 @@ static void each(void)
 {
 	Value q = POP();
 	Value a = POP();
-	struct array *ary, *computation = quot_create();
+	Array *ary, *computation = quot_create();
 	unsigned i;
 
 	if (get_type(q) != QUOT)
@@ -238,14 +238,14 @@ static void each(void)
 
 static void _push(void)
 {
-	struct array *a = as_ref(POP_TYPE(ARRAY));
+	Array *a = as_ref(POP_TYPE(ARRAY));
 	array_push(a, POP());	/* FIXME: does the forward ptr handle resizing ok? */
 	inc_pc();
 }
 
 static void _pop(void)
 {
-	struct array *a = as_ref(POP_TYPE(ARRAY));
+	Array *a = as_ref(POP_TYPE(ARRAY));
 	PUSH(array_pop(a));
 	inc_pc();
 }
@@ -254,7 +254,7 @@ static void map(void)
 {
 	Value q = POP();
 	Value a = POP();
-	struct array *ary, *computation = quot_create();
+	Array *ary, *computation = quot_create();
 	unsigned i;
 
 	if (get_type(q) != QUOT)
@@ -295,7 +295,7 @@ static void mk_tuple(void)
 	unsigned i;
 	Value name = POP();
 	int count = as_fixnum(POP());
-	struct array *a = alloc(TUPLE, sizeof(*a));
+	Array *a = alloc(TUPLE, sizeof(*a));
 	Value r = mk_ref(a);
 
 	a->nr_elts = count + 1;
@@ -394,8 +394,8 @@ static bool ll_eq(Value v1, Value v2)
 		// FIXME: factor out
 	{
 		unsigned i;
-		struct array *a1 = v1.ptr;
-		struct array *a2 = v2.ptr;
+		Array *a1 = v1.ptr;
+		Array *a2 = v2.ptr;
 
 		if (a1->nr_elts != a2->nr_elts)
 			return false;

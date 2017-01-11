@@ -16,7 +16,7 @@
 
 typedef struct {
 	struct list_head list;
-	struct array *code;
+	Array *code;
 	unsigned position;
 } CodePosition;
 
@@ -39,9 +39,9 @@ typedef struct {
 } Token;
 
 typedef struct {
-	struct array *data_stack;
-	struct array *call_stack;
-	struct array *catch_stack;
+	Array *data_stack;
+	Array *call_stack;
+	Array *catch_stack;
 } Continuation;
 
 typedef struct {
@@ -83,13 +83,13 @@ static inline Value PEEKN(unsigned n) {
 	return array_peekn(global_vm->k->data_stack, n);
 }
 
-void push_call(struct array *code);
+void push_call(Array *code);
 void pop_call(void);
 
 Value mk_string(const char *b, const char *e);
 void def_primitive(VM *vm, char *k, PrimFn fn);
 
-void eval(VM *vm, struct array *code);
+void eval(VM *vm, Array *code);
 Value mk_quot(void);
 void print_value(FILE *stream, Value v);
 

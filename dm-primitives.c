@@ -162,7 +162,7 @@ static void dm_clear(void)
 static void dm_load(void)
 {
 	char buffer[8192];
-	struct array *table = as_type(ARRAY, POP());
+	Array *table = as_type(ARRAY, POP());
 	String *name = as_type(STRING, POP());
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
 	struct dm_target_spec *spec;
@@ -175,7 +175,7 @@ static void dm_load(void)
 	spec = (struct dm_target_spec *) (ctl + 1);
 
 	for (unsigned i = 0; i < table->nr_elts; i++) {
-		struct array *target = as_type(ARRAY, array_get(table, i));
+		Array *target = as_type(ARRAY, array_get(table, i));
 
 		if (target->nr_elts != 3)
 			error("<target> does not have 3 elements");
@@ -211,7 +211,7 @@ static void status_cmd(unsigned flags)
 {
 	char buffer[8192];
 	String *name = as_type(STRING, POP());
-	struct array *table = array_create();
+	Array *table = array_create();
 	struct dm_ioctl *ctl = (struct dm_ioctl *) buffer;
 	struct dm_target_spec *spec;
 	char *spec_start;
@@ -229,7 +229,7 @@ static void status_cmd(unsigned flags)
 	spec = (struct dm_target_spec *) (ctl + 1);
 	spec_start = (char *) spec;
 	for (unsigned i = 0; i < ctl->target_count; i++) {
-		struct array *target = array_create();
+		Array *target = array_create();
 
 		target = array_push(target, mk_fixnum(spec->length));
 		target = array_push(target, mk_ref(string_clone_cstr(spec->target_type)));

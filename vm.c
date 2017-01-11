@@ -88,7 +88,7 @@ void push_byte(struct byte_array *ba, unsigned b)
 
 Value mk_quot(void)
 {
-	struct array *a = array_create();
+	Array *a = array_create();
 	set_obj_type(a, QUOT);
 	return mk_ref(a);
 }
@@ -107,7 +107,7 @@ void print_string(FILE *stream, String *str)
 	fputc('\"', stream);
 }
 
-static void print_array_like(FILE *stream, struct array *a, char b, char e)
+static void print_array_like(FILE *stream, Array *a, char b, char e)
 {
 	unsigned i;
 
@@ -119,12 +119,12 @@ static void print_array_like(FILE *stream, struct array *a, char b, char e)
 	fprintf(stream, "%c", e);
 }
 
-static void print_array(FILE *stream, struct array *a)
+static void print_array(FILE *stream, Array *a)
 {
 	print_array_like(stream, a, '{', '}');
 }
 
-static void print_quot(FILE *stream, struct array *a)
+static void print_quot(FILE *stream, Array *a)
 {
 	print_array_like(stream, a, '[', ']');
 }
@@ -208,11 +208,11 @@ void print_value(FILE *stream, Value v)
 			break;
 
 		case QUOT:
-			print_quot(stream, (struct array *) v.ptr);
+			print_quot(stream, (Array *) v.ptr);
 			break;
 
 		case ARRAY:
-			print_array(stream, (struct array *) v.ptr);
+			print_array(stream, (Array *) v.ptr);
 			break;
 
 		case CODE_POSITION:
@@ -259,7 +259,7 @@ static void white(FILE *stream)
 	fprintf(stream, "\x1b[37m");
 }
 
-static void print_stack(FILE *stream, VM *vm, struct array *a)
+static void print_stack(FILE *stream, VM *vm, Array *a)
 {
 	unsigned i;
 
@@ -447,12 +447,12 @@ void def_primitive(VM *vm, char *name, PrimFn fn)
 	namespace_insert(vm->current_ns, &k, mk_ref(p));
 }
 
-static void def_word(String *w, struct array *body)
+static void def_word(String *w, Array *body)
 {
 	namespace_insert(global_vm->current_ns, w, mk_ref(body));
 }
 
-void push_call(struct array *code)
+void push_call(Array *code)
 {
 	CodePosition *pc = zalloc(CODE_POSITION, sizeof(*pc));
 	pc->code = code;
@@ -462,7 +462,7 @@ void push_call(struct array *code)
 
 void inc_pc(void)
 {
-	struct array *s = global_vm->k->call_stack;
+	Array *s = global_vm->k->call_stack;
 
 	if (s->nr_elts) {
 		CodePosition *pc = as_type(CODE_POSITION, array_peek(s));
@@ -569,7 +569,7 @@ Continuation *cc(VM *vm)
 	return k;
 }
 
-void eval(VM *vm, struct array *code)
+void eval(VM *vm, Array *code)
 {
 	int r;
 	Value v;
@@ -588,7 +588,7 @@ void eval(VM *vm, struct array *code)
 	vm->handling_error = false;
 
 	while (more_code()) {
-		struct array *s = vm->k->call_stack;
+		Array *s = vm->k->call_stack;
 		pc = as_type(CODE_POSITION, array_peek(s));
 		v = array_get(pc->code, pc->position);
 		eval_value(v);
@@ -733,11 +733,11 @@ static bool string_next_value(struct string_source *ss, Value *r)
 	return true;
 }
 
-static struct array *_read(String *str)
+static Array *_read(String *str)
 {
 	Value v;
 	struct string_source in;
-	struct array *a = array_create();
+	Array *a = array_create();
 
 	in.in = *str;
 	while (string_next_value(&in, &v))
@@ -751,7 +751,7 @@ static void load_file(VM *vm, const char *path)
 	int fd;
 	struct stat info;
 	String input;
-	struct array *code;
+	Array *code;
 
 	if (stat(path, &info) < 0)
 		error("couldn't stat '%s'\n", path);

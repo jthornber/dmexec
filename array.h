@@ -5,34 +5,34 @@
 
 //----------------------------------------------------------------
 
-struct array {
+typedef struct {
 	unsigned nr_elts;
 	unsigned nr_allocated;
-};
+} Array;
 
-struct array *array_create(void);
-struct array *quot_create(void);
+Array *array_create(void);
+Array *quot_create(void);
 
 // Clones the values (but no deeper)
-struct array *array_deep_clone(struct array *a);
+Array *array_deep_clone(Array *a);
 
-struct array *array_resize(struct array *old, unsigned new_nr_alloc);
+Array *array_resize(Array *old, unsigned new_nr_alloc);
 
-Value array_get(struct array *a, unsigned i);
-void array_set(struct array *a, unsigned i, Value v);
+Value array_get(Array *a, unsigned i);
+void array_set(Array *a, unsigned i, Value v);
 
-struct array *array_push(struct array *a, Value v);
-Value array_pop(struct array *a);
+Array *array_push(Array *a, Value v);
+Value array_pop(Array *a);
 
-Value array_peek(struct array *a);
-Value array_peekn(struct array *a, unsigned n);
+Value array_peek(Array *a);
+Value array_peekn(Array *a, unsigned n);
 
-struct array *array_unshift(struct array *a, Value v);
-Value array_shift(struct array *a);
+Array *array_unshift(Array *a, Value v);
+Value array_shift(Array *a);
 
-struct array *array_concat(struct array *a, struct array *a2);
+Array *array_concat(Array *a, Array *a2);
 
-void array_reverse(struct array *a);
+void array_reverse(Array *a);
 
 //----------------------------------------------------------------
 
