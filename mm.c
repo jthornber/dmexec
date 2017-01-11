@@ -73,10 +73,9 @@ void *clone(void *obj_)
 
 void *as_ref(Value v)
 {
-	void *obj = v.ptr;
 	if (get_tag(v) != TAG_REF)
 		error("type error: value is not a reference.");
-	return follow_fwd_ptrs(obj);
+	return follow_fwd_ptrs(v.ptr);
 }
 
 void replace_obj(void *old_obj, void *new_obj)
@@ -87,8 +86,7 @@ void replace_obj(void *old_obj, void *new_obj)
 
 void set_obj_type(void *obj, ObjectType t)
 {
-	Header *h = obj_to_header(obj);
-	h->type = t;
+	obj_to_header(obj)->type = t;
 }
 
 ObjectType get_obj_type(void *obj)
