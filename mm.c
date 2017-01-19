@@ -1,5 +1,6 @@
 #include "mm.h"
 
+#include <gc.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -24,7 +25,9 @@ static void out_of_memory(void)
 void *alloc(ObjectType type, size_t s)
 {
 	size_t len = s + sizeof(Header);
-	Header *h = malloc(len);
+
+	// Also zeroes memory
+	Header *h = GC_MALLOC(len);
 
 	if (!h)
 		out_of_memory();
@@ -39,9 +42,7 @@ void *alloc(ObjectType type, size_t s)
 
 void *zalloc(ObjectType type, size_t s)
 {
-	void *ptr = alloc(type, s);
-	memset(ptr, 0, s);
-	return ptr;
+	return alloc(type, s);
 }
 
 static Header *obj_to_header(void *obj)

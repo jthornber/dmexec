@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <fcntl.h>
+#include <gc.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -824,6 +825,7 @@ int main(int argc, char **argv)
 	unsigned i;
 	VM vm;
 
+	GC_INIT();
 	init_vm(&vm);
 	def_basic_primitives(&vm);
 	def_dm_primitives(&vm);
@@ -838,6 +840,8 @@ int main(int argc, char **argv)
 
 	printf("\n\ntotal allocated: %llu\n",
 	       (unsigned long long) get_memory_stats()->total_allocated);
+	printf("heap size: %llu\n",
+	       (unsigned long long) GC_get_heap_size());
 
 	return 0;
 }

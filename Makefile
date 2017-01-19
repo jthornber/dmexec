@@ -17,7 +17,8 @@ INCLUDES=\
 	-I.
 
 LIBS=\
-	-lreadline
+	-lreadline \
+	-lgc
 
 SOURCE=\
 	array.c \
