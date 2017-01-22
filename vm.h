@@ -7,6 +7,7 @@
 #include <setjmp.h>
 
 #include "array.h"
+#include "cons.h"
 #include "error.h"
 #include "list.h"
 #include "mm.h"

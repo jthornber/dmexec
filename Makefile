@@ -22,6 +22,7 @@ LIBS=\
 
 SOURCE=\
 	array.c \
+	cons.c \
 	basic_primitives.c \
 	dm-primitives.c \
 	mm.c \

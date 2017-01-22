@@ -408,6 +408,10 @@ static bool ll_eq(Value v1, Value v2)
 		return true;
 	}
 
+	case CONS:
+	case NIL:
+	// FIXME: simple pointer comparison should do now we've decided on
+	// immutable data.
 	case FORWARD:
 	case NAMESPACE:
 	case NAMESPACE_ENTRY:

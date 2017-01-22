@@ -17,14 +17,18 @@ typedef enum {
 	WORD,
 	QUOT,
 	ARRAY,
+	CONS,
+	NIL,
 	CODE_POSITION,
 	CONTINUATION,
 
 	/* these are always tagged immediate values */
+	// FIXME we need 64 bit integers for device sizes
 	FIXNUM,
 	FALSE_TYPE
 } ObjectType;
 
+// FIXME: huge tag
 typedef struct {
 	ObjectType type;
 	unsigned size; 		/* in bytes, we always round to a 4 byte boundary */
