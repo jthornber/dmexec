@@ -112,8 +112,8 @@ ObjectType get_type(Value v)
 	if (get_tag(v) == TAG_FIXNUM)
 		return FIXNUM;
 
-	if (get_tag(v) == TAG_FALSE)
-		return FALSE_TYPE;
+	if (get_tag(v) == TAG_NIL)
+		return NIL;
 
 	return get_obj_type(as_ref(v));
 }
@@ -157,7 +157,7 @@ Value clone_value(Value v)
 Value mk_false(void)
 {
 	Value v;
-	v.i = TAG_FALSE;
+	v.i = TAG_NIL;
 	return v;
 }
 
@@ -173,7 +173,7 @@ Value mk_true(void)
 
 bool is_false(Value v)
 {
-	return v.i == TAG_FALSE;
+	return v.i == NIL;
 }
 
 void *as_type(ObjectType t, Value v)

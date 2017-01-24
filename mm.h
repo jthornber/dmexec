@@ -25,7 +25,6 @@ typedef enum {
 	/* these are always tagged immediate values */
 	// FIXME we need 64 bit integers for device sizes
 	FIXNUM,
-	FALSE_TYPE
 } ObjectType;
 
 // FIXME: huge tag
@@ -58,7 +57,7 @@ MemoryStats *get_memory_stats(void);
 typedef enum {
 	TAG_REF = 0,
 	TAG_FIXNUM = 1,
-	TAG_FALSE
+	TAG_NIL
 } Tag;
 
 typedef union value {
@@ -75,7 +74,7 @@ Header *get_header(Value v);
 ObjectType get_type(Value v);
 
 Tag get_tag(Value v);
-Value mk_false(void);
+Value mk_nil(void);
 Value mk_true(void);
 
 int as_fixnum(Value v);

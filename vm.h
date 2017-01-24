@@ -24,13 +24,12 @@ typedef struct {
 typedef enum {
 	TOK_FIXNUM,
 	TOK_STRING,
-	TOK_WORD,
-	TOK_COLON,
-	TOK_SEMI_COLON,
-	TOK_OPEN_BRACE,
-	TOK_CLOSE_BRACE,
-	TOK_OPEN_SQUARE,
-	TOK_CLOSE_SQUARE
+	TOK_SYM,
+	TOK_OPEN,
+	TOK_CLOSE,
+	TOK_DOT,
+	TOK_QUOTE,
+	TOK_EOF
 } TokenType;
 
 typedef struct {
@@ -87,6 +86,7 @@ static inline Value PEEKN(unsigned n) {
 void push_call(Array *code);
 void pop_call(void);
 
+// FIXME: why aren't mk_{string, fixnum ...} in mm.h?
 Value mk_string(const char *b, const char *e);
 void def_primitive(VM *vm, char *k, PrimFn fn);
 
@@ -101,7 +101,6 @@ Value mk_symbol(String *str);
 Value mk_word(String *str);
 Value mk_word_cstr(char *str);
 
-void throw(void);
 void print_string(FILE *stream, String *str);
 
 Continuation *cc(VM *vm);

@@ -84,15 +84,6 @@ void push_byte(struct byte_array *ba, unsigned b)
 	ba->bytes[ba->len++] = b;
 }
 #endif
-//----------------------------------------------------------------
-// Quotations
-
-Value mk_quot(void)
-{
-	Array *a = array_create();
-	set_obj_type(a, QUOT);
-	return mk_ref(a);
-}
 
 //----------------------------------------------------------------
 // Printing values
@@ -228,8 +219,8 @@ void print_value(FILE *stream, Value v)
 			fprintf(stream, "~boxed fixnum?!~");
 			break;
 
-		case FALSE_TYPE:
-			fprintf(stream, "f");
+		case NIL:
+			fprintf(stream, "()");
 			break;
 		}
 		break;
@@ -379,19 +370,37 @@ static bool scan_string(String *in, Token *result)
 	return true;
 }
 
-static bool scan_word(String *in, Token *result)
+static bool is_sym_char(char c)
 {
-	result->type = TOK_WORD;
+	static const char *special = "()';\\|";
+	return !isspace(c) && !strchr(special, c);
+}
+
+static bool scan_sym(String *in, Token *result)
+{
+	result->type = TOK_SYM;
 	result->str.b = in->b;
 
-	while (more_input(in) && !isspace(*in->b))
+	while (more_input(in) && is_sym_char(*in->b))
 		step_input(in);
 
 	result->str.e = in->b;
 	return true;
 }
 
-static bool scan(String *in, Token *result)
+static bool mk_punc(String *in, Token *result, char c, TokenType t)
+{
+	if (*in->b != c)
+		return false;
+
+	result->type = t;
+	result->str.b = in->b;
+	step_input(in);
+	result->str.e = in->b;
+	return true;
+}
+
+static Token scan(String *in)
 {
 	if (!more_input(in))
 		return false;
@@ -407,13 +416,131 @@ static bool scan(String *in, Token *result)
 	else if (*in->b == '\"')
 		return scan_string(in, result);
 
+	else if (mk_punc(in, '(', TOK_OPEN, result) ||
+		 mk_punc(in, ')', TOK_CLOSE, result) ||
+		 mk_punc(in, '\'', TOK_QUOTE, result) ||
+		 mk_punc(in, '.', TOK_DOT, result))
+		return true;
+
 	else
-		return scan_word(in, result);
+		return scan_sym(in, result);
+}
+
+typedef struct {
+	String *in;
+	Token tok;
+} TokenStream;
+
+static void stream_init(String *in, TokenStream *ts)
+{
+	ts->in = in;
+	ts->tok = scan(in);
+}
+
+static Token *peek(TokenStream *ts)
+{
+	return &ts->tok;
+}
+
+static void shift(TokenStream *ts)
+{
+	ts->tok = scan(ts->in);
 }
 
 //----------------------------------------------------------------
-// Interpreter
+// Read
 
+// false indicates end of input, errors call the error handler and jump back
+// into the repl.
+static bool read_list(TokenStream *ts, Value *result);
+static bool read_quote(TokenStream *ts, Value *result);
+
+static bool read(TokenStream *ts, Value *result)
+{
+	Token *tok = peek(ts);
+
+	if (tok->type == TOK_EOF)
+		return false;
+
+	switch (tok.type) {
+	case TOK_FIXNUM:
+		shift(ts);
+		*result = mk_fixnum(tok->fixnum);
+		break;
+
+	case TOK_STRING:
+		shift(ts);
+		*result = mk_string(tok->str);
+		break;
+
+	case TOK_SYM:
+		shift(ts);
+		*result = mk_symbol(tok->str);
+		break;
+
+	case TOK_OPEN:
+		shift(ts);
+		return read_list(ts, result);
+
+	case TOK_QUOTE:
+		shift(ts);
+		return read_quote(ts, result);
+
+	default:
+		error("unexpected token");
+	}
+
+	return true;
+}
+
+static bool read_list(TokenStream *ts, Value *result)
+{
+	Token *tok = peek(ts);
+
+	ListBuilder lb;
+	lb_init(&lb);
+
+	for (;;) {
+		if (tok->type == TOK_DOT) {
+			// FIXME: finish
+			error("lazy programmer hasn't implemented dotted lists");
+
+		} else if (tok->type == TOK_CLOSE) {
+			shift(ts);
+			*result = lb_get(&lb);
+			return true;
+
+		} else {
+			bool r = read(ts, result);
+			if (!read(ts, result))
+				error("malformed list; unexpected eof");
+			lb_append(&lb, *result);
+		}
+	}
+
+	// Can't get here.
+	return false;
+}
+
+static bool read_quote(TokenStream *ts, Value *result)
+{
+	ListBuilder lb;
+
+	lb_init(&lb);
+	lb_append(&lb, mk_symbol("quote"));
+
+	if (!read(in, result))
+		error("malformed quote; unexpected eof");
+
+	lb_append(&lb, *result);
+	*result = lb_get(&lb);
+	return true;
+}
+
+//----------------------------------------------------------------
+// Eval
+
+#if 0
 struct primitive {
 	PrimFn fn;
 };
@@ -595,8 +722,17 @@ void eval(VM *vm, Array *code)
 		eval_value(v);
 	}
 }
+#endif
 
-void throw(void)
+static Value eval(Value sexp)
+{
+	return sexp;
+}
+
+//----------------------------------------------------------------
+// Loop
+
+static void throw(void)
 {
 	if (global_vm->handling_error) {
 		fprintf(stderr, "error whilst handling error, aborting");
@@ -630,123 +766,6 @@ void error(const char *format, ...)
 	throw();
 }
 
-//----------------------------------------------------------------
-// String source
-
-struct string_source {
-	String in;
-	Token tok;
-};
-
-static bool string_next_value(struct string_source *in, Value *r);
-
-static bool is_word(char *target, Value v)
-{
-	String *w;
-
-	if (get_type(v) != WORD)
-		return false;
-
-	w = as_ref(v);
-	return !string_cmp_cstr(w, target);
-}
-
-static bool syntax_quot(struct string_source *ss, Value *r)
-{
-	Value r2;
-
-	*r = mk_quot();
-	while (string_next_value(ss, &r2) && !is_word("]", r2))
-		array_push(as_ref(*r), r2);
-
-	return true;
-}
-
-static bool syntax_array(struct string_source *ss, Value *r)
-{
-	Value r2;
-
-	*r = mk_ref(array_create());
-	while (string_next_value(ss, &r2) && !is_word("}", r2))
-		array_push(as_ref(*r), r2);
-
-	return true;
-}
-
-static void syntax_definition(struct string_source *ss)
-{
-	Value w, body, v;
-
-	if (!string_next_value(ss, &w)) {
-		error("bad definition");
-		exit(1);
-	}
-
-	body = mk_quot();
-	while (string_next_value(ss, &v) && !is_word(";", v))
-		array_push(as_ref(body), v);
-
-	def_word(as_ref(w), as_ref(body));
-}
-
-static bool string_next_value(struct string_source *ss, Value *r)
-{
-	if (!scan(&ss->in, &ss->tok))
-		return false;
-
-	switch (ss->tok.type) {
-	case TOK_FIXNUM:
-		*r = mk_fixnum(ss->tok.fixnum);
-		break;
-
-	case TOK_STRING:
-		*r = mk_ref(string_clone(&ss->tok.str));
-		break;
-
-	case TOK_WORD:
-		/*
-		 * Syntax words should be evaluated immediately.
-		 */
-		if (!string_cmp_cstr(&ss->tok.str, "f"))
-			*r = mk_false();
-
-		else if (!string_cmp_cstr(&ss->tok.str, "{"))
-			return syntax_array(ss, r);
-
-		else if (!string_cmp_cstr(&ss->tok.str, "["))
-			return syntax_quot(ss, r);
-
-		else if (!string_cmp_cstr(&ss->tok.str, ":")) {
-			syntax_definition(ss);
-			return string_next_value(ss, r);
-
-		} else if (*ss->tok.str.b == ':')
-			*r = mk_symbol(&ss->tok.str);
-
-		else
-			*r = mk_word(&ss->tok.str);
-		break;
-
-	default:
-		error("unhandled token type: %d.", ss->tok.type);
-	}
-
-	return true;
-}
-
-static Array *_read(String *str)
-{
-	Value v;
-	struct string_source in;
-	Array *a = array_create();
-
-	in.in = *str;
-	while (string_next_value(&in, &v))
-		a = array_push(a, v);
-
-	return a;
-}
-
 static void load_file(VM *vm, const char *path)
 {
 	int fd;
@@ -774,16 +793,11 @@ static void load_file(VM *vm, const char *path)
 	close(fd);
 }
 
-//----------------------------------------------------------------
-// Top level
-
-/* A static variable for holding the line. */
-static char *line_read = (char *)NULL;
-
-/* Read a string, and return a pointer to it.
-   Returns NULL on EOF. */
-char *rl_gets ()
+// Read a string, and return a pointer to it.  Returns NULL on EOF.
+const char *rl_gets()
 {
+	static char *line_read = NULL;
+
 	/* If the buffer has already been allocated,
 	   return the memory to the free pool. */
 	if (line_read) {
@@ -799,12 +813,12 @@ char *rl_gets ()
 	return line_read;
 }
 
-// FIXME: this should be written in dm code
 static int repl(VM *vm)
 {
-	char *buffer;
+	const char *buffer;
 	String input;
 
+	global_vm = vm;
 	for (;;) {
 		buffer = rl_gets();
 		if (!buffer)
@@ -812,9 +826,9 @@ static int repl(VM *vm)
 
 		input.b = buffer;
 		input.e = buffer + strlen(buffer);
-		global_vm = vm;
-		eval(vm, _read(&input));
-		print_stack(stdout, vm, vm->k->data_stack);
+		stream_init(&stream, &input);
+		while (read(ts, &v))
+			print(eval(vm, v));
 	}
 
 	return 0;
@@ -830,7 +844,7 @@ int main(int argc, char **argv)
 	def_basic_primitives(&vm);
 	def_dm_primitives(&vm);
 
-	load_file(&vm, "prelude.dm");
+	//load_file(&vm, "prelude.dm");
 
 	if (argc > 1)
 		for (i = 1; i < argc; i++)

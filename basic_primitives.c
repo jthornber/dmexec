@@ -9,6 +9,7 @@
 /*----------------------------------------------------------------
  * Primitives
  *--------------------------------------------------------------*/
+#if 0
 static void clear(void)
 {
 	global_vm->k->data_stack->nr_elts = 0;
@@ -449,9 +450,11 @@ static void eq(void)
 
 	inc_pc();
 }
+#endif
 
 void def_basic_primitives(VM *vm)
 {
+#if 0
 	def_primitive(vm, "eq", eq);
 
 	def_primitive(vm, "catch-stack", catch_stack);
@@ -500,6 +503,7 @@ void def_basic_primitives(VM *vm)
 
 	def_primitive(vm, "namespace-push", namespace_push);
 	def_primitive(vm, "namespace-pop", namespace_pop);
+#endif
 }
 
 /*----------------------------------------------------------------*/
