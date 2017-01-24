@@ -86,210 +86,6 @@ void push_byte(struct byte_array *ba, unsigned b)
 #endif
 
 //----------------------------------------------------------------
-// Printing values
-static void print_continuation(FILE *stream, Continuation *k);
-
-void print_string(FILE *stream, String *str)
-{
-	const char *ptr;
-
-	fputc('\"', stream);
-	for (ptr = str->b; ptr != str->e; ptr++)
-		fputc(*ptr, stream);
-	fputc('\"', stream);
-}
-
-static void print_array_like(FILE *stream, Array *a, char b, char e)
-{
-	unsigned i;
-
-	fprintf(stream, "%c ", b);
-	for (i = 0; i < a->nr_elts; i++) {
-		print_value(stream, array_get(a, i));
-		fprintf(stream, " ");
-	}
-	fprintf(stream, "%c", e);
-}
-
-static void print_array(FILE *stream, Array *a)
-{
-	print_array_like(stream, a, '{', '}');
-}
-
-static void print_quot(FILE *stream, Array *a)
-{
-	print_array_like(stream, a, '[', ']');
-}
-
-#if 0
-static void print_tuple(FILE *stream, struct tuple *t)
-{
-	// FIXME: print out the class
-	print_array_like(stream, t, '|', '|');
-}
-#endif
-
-static void print_word(FILE *stream, String *w)
-{
-	const char *ptr;
-
-	for (ptr = w->b; ptr != w->e; ptr++)
-		fputc(*ptr, stream);
-}
-
-static void print_namespace_entry(void *ctxt, String *k, Value v)
-{
-	FILE *stream = ctxt;
-	fprintf(stream, "{ ");
-	print_word(stream, k);
-	fprintf(stream, " ");
-	print_value(stream, v);
-	fprintf(stream, " } ");
-}
-
-static void print_namespace(FILE *stream, struct namespace *ns)
-{
-	fprintf(stream, "H{ ");
-	namespace_visit(ns, print_namespace_entry, stream);
-	fprintf(stream, "}");
-}
-
-void print_value(FILE *stream, Value v)
-{
-	Header *h;
-
-	switch (get_tag(v)) {
-	case TAG_FIXNUM:
-		fprintf(stream, "%d", as_fixnum(v));
-		break;
-
-	case TAG_REF:
-		h = get_header(v);
-		switch (h->type) {
-		case FORWARD:
-			error("unexpected fwd ptr");
-			break;
-
-		case NAMESPACE:
-			print_namespace(stream, v.ptr);
-			break;
-
-		case NAMESPACE_ENTRY:
-			fprintf(stream, "~namespace entry~");
-			break;
-
-		case PRIMITIVE:
-			fprintf(stream, "~primitive~");
-			break;
-
-		case STRING:
-			print_string(stream, (String *) v.ptr);
-			break;
-
-		case BYTE_ARRAY:
-			fprintf(stream, "~byte array~");
-			break;
-
-		case TUPLE:
-			//		print_tuple(stream, v.ptr);
-			break;
-
-		case SYMBOL:
-		case WORD:
-			print_word(stream, v.ptr);
-			break;
-
-		case QUOT:
-			print_quot(stream, (Array *) v.ptr);
-			break;
-
-		case ARRAY:
-			print_array(stream, (Array *) v.ptr);
-			break;
-
-		case CODE_POSITION:
-			fprintf(stream, "~code position~");
-			break;
-
-		case CONTINUATION:
-			print_continuation(stream, v.ptr);
-			break;
-
-		case FIXNUM:
-			fprintf(stream, "~boxed fixnum?!~");
-			break;
-
-		case NIL:
-			fprintf(stream, "()");
-			break;
-		}
-		break;
-
-	case TAG_FALSE:
-		fprintf(stream, "f");
-		break;
-	}
-}
-
-static void red(FILE *stream)
-{
-	fprintf(stream, "\x1b[31m");
-}
-
-static void green(FILE *stream)
-{
-	fprintf(stream, "\x1b[32m");
-}
-
-static void yellow(FILE *stream)
-{
-	fprintf(stream, "\x1b[33m");
-}
-
-static void white(FILE *stream)
-{
-	fprintf(stream, "\x1b[37m");
-}
-
-static void print_stack(FILE *stream, VM *vm, Array *a)
-{
-	unsigned i;
-
-	fprintf(stream, "\n--- Data stack:\n");
-	for (i = 0; i < a->nr_elts; i++) {
-		print_value(stream, array_get(a, i));
-		fprintf(stream, "\n");
-	}
-}
-
-static void print_continuation(FILE *stream, Continuation *k)
-{
-	unsigned f, i;
-
-	print_stack(stream, global_vm, k->data_stack);
-
-	fprintf(stream, "\n--- Call stack:\n");
-	for (f = 0; f < k->call_stack->nr_elts; f++) {
-		CodePosition *cp = as_ref(array_get(k->call_stack, f));
-
-		green(stream);
-		for (i = 0; i < cp->code->nr_elts; i++) {
-			if (cp->position == i)
-				red(stream);
-
-			print_value(stream, array_get(cp->code, i));
-
-			if (cp->position == i)
-				yellow(stream);
-
-			fprintf(stream, " ");
-		}
-		white(stream);
-		fprintf(stream, "\n");
-	}
-}
-
-//----------------------------------------------------------------
 // Lexer
 
 static bool more_input(String *in)
@@ -727,6 +523,210 @@ void eval(VM *vm, Array *code)
 static Value eval(Value sexp)
 {
 	return sexp;
+}
+
+//----------------------------------------------------------------
+// Print
+static void print_continuation(FILE *stream, Continuation *k);
+
+void print_string(FILE *stream, String *str)
+{
+	const char *ptr;
+
+	fputc('\"', stream);
+	for (ptr = str->b; ptr != str->e; ptr++)
+		fputc(*ptr, stream);
+	fputc('\"', stream);
+}
+
+static void print_array_like(FILE *stream, Array *a, char b, char e)
+{
+	unsigned i;
+
+	fprintf(stream, "%c ", b);
+	for (i = 0; i < a->nr_elts; i++) {
+		print_value(stream, array_get(a, i));
+		fprintf(stream, " ");
+	}
+	fprintf(stream, "%c", e);
+}
+
+static void print_array(FILE *stream, Array *a)
+{
+	print_array_like(stream, a, '{', '}');
+}
+
+static void print_quot(FILE *stream, Array *a)
+{
+	print_array_like(stream, a, '[', ']');
+}
+
+#if 0
+static void print_tuple(FILE *stream, struct tuple *t)
+{
+	// FIXME: print out the class
+	print_array_like(stream, t, '|', '|');
+}
+#endif
+
+static void print_word(FILE *stream, String *w)
+{
+	const char *ptr;
+
+	for (ptr = w->b; ptr != w->e; ptr++)
+		fputc(*ptr, stream);
+}
+
+static void print_namespace_entry(void *ctxt, String *k, Value v)
+{
+	FILE *stream = ctxt;
+	fprintf(stream, "{ ");
+	print_word(stream, k);
+	fprintf(stream, " ");
+	print_value(stream, v);
+	fprintf(stream, " } ");
+}
+
+static void print_namespace(FILE *stream, struct namespace *ns)
+{
+	fprintf(stream, "H{ ");
+	namespace_visit(ns, print_namespace_entry, stream);
+	fprintf(stream, "}");
+}
+
+void print_value(FILE *stream, Value v)
+{
+	Header *h;
+
+	switch (get_tag(v)) {
+	case TAG_FIXNUM:
+		fprintf(stream, "%d", as_fixnum(v));
+		break;
+
+	case TAG_REF:
+		h = get_header(v);
+		switch (h->type) {
+		case FORWARD:
+			error("unexpected fwd ptr");
+			break;
+
+		case NAMESPACE:
+			print_namespace(stream, v.ptr);
+			break;
+
+		case NAMESPACE_ENTRY:
+			fprintf(stream, "~namespace entry~");
+			break;
+
+		case PRIMITIVE:
+			fprintf(stream, "~primitive~");
+			break;
+
+		case STRING:
+			print_string(stream, (String *) v.ptr);
+			break;
+
+		case BYTE_ARRAY:
+			fprintf(stream, "~byte array~");
+			break;
+
+		case TUPLE:
+			//		print_tuple(stream, v.ptr);
+			break;
+
+		case SYMBOL:
+		case WORD:
+			print_word(stream, v.ptr);
+			break;
+
+		case QUOT:
+			print_quot(stream, (Array *) v.ptr);
+			break;
+
+		case ARRAY:
+			print_array(stream, (Array *) v.ptr);
+			break;
+
+		case CODE_POSITION:
+			fprintf(stream, "~code position~");
+			break;
+
+		case CONTINUATION:
+			print_continuation(stream, v.ptr);
+			break;
+
+		case FIXNUM:
+			fprintf(stream, "~boxed fixnum?!~");
+			break;
+
+		case NIL:
+			fprintf(stream, "()");
+			break;
+		}
+		break;
+
+	case TAG_FALSE:
+		fprintf(stream, "f");
+		break;
+	}
+}
+
+static void red(FILE *stream)
+{
+	fprintf(stream, "\x1b[31m");
+}
+
+static void green(FILE *stream)
+{
+	fprintf(stream, "\x1b[32m");
+}
+
+static void yellow(FILE *stream)
+{
+	fprintf(stream, "\x1b[33m");
+}
+
+static void white(FILE *stream)
+{
+	fprintf(stream, "\x1b[37m");
+}
+
+static void print_stack(FILE *stream, VM *vm, Array *a)
+{
+	unsigned i;
+
+	fprintf(stream, "\n--- Data stack:\n");
+	for (i = 0; i < a->nr_elts; i++) {
+		print_value(stream, array_get(a, i));
+		fprintf(stream, "\n");
+	}
+}
+
+static void print_continuation(FILE *stream, Continuation *k)
+{
+	unsigned f, i;
+
+	print_stack(stream, global_vm, k->data_stack);
+
+	fprintf(stream, "\n--- Call stack:\n");
+	for (f = 0; f < k->call_stack->nr_elts; f++) {
+		CodePosition *cp = as_ref(array_get(k->call_stack, f));
+
+		green(stream);
+		for (i = 0; i < cp->code->nr_elts; i++) {
+			if (cp->position == i)
+				red(stream);
+
+			print_value(stream, array_get(cp->code, i));
+
+			if (cp->position == i)
+				yellow(stream);
+
+			fprintf(stream, " ");
+		}
+		white(stream);
+		fprintf(stream, "\n");
+	}
 }
 
 //----------------------------------------------------------------
