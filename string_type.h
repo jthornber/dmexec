@@ -4,11 +4,11 @@
 //----------------------------------------------------------------
 
 typedef struct {
-	char *b;
-	char *e;
+	const char *b;
+	const char *e;
 } String;
 
-void string_tmp(char *cstr, String *str);
+void string_tmp(const char *cstr, String *str);
 
 static inline unsigned string_len(String *str)
 {
@@ -16,7 +16,7 @@ static inline unsigned string_len(String *str)
 }
 
 String *string_clone(String *str);
-String *string_clone_cstr(char *str);
+String *string_clone_cstr(const char *str);
 
 int string_cmp(String *lhs, String *rhs);
 int string_cmp_cstr(String *lhs, char *rhs);

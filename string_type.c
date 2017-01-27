@@ -8,7 +8,7 @@
 
 //----------------------------------------------------------------
 
-void string_tmp(char *cstr, String *str)
+void string_tmp(const char *cstr, String *str)
 {
 	str->b = cstr;
 	str->e = cstr + strlen(cstr);
@@ -18,14 +18,14 @@ String *string_clone(String *str)
 {
 	size_t len = str->e - str->b;
 	String *copy = alloc(STRING, sizeof(*copy) + len);
-	copy->b = (char *) (copy + 1);
+	copy->b = (const char *) (copy + 1);
 	copy->e = copy->b + len;
-	memcpy(copy->b, str->b, len);
+	memcpy((char *) copy->b, str->b, len);
 
 	return copy;
 }
 
-String *string_clone_cstr(char *str)
+String *string_clone_cstr(const char *str)
 {
 	String tmp;
 	string_tmp(str, &tmp);

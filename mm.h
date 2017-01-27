@@ -7,20 +7,11 @@
 
 typedef enum {
 	FORWARD,
-	NAMESPACE,
-	NAMESPACE_ENTRY,
 	PRIMITIVE,
 	STRING,
-	BYTE_ARRAY,
-	TUPLE,
 	SYMBOL,
-	WORD,
-	QUOT,
-	ARRAY,
 	CONS,
 	NIL,
-	CODE_POSITION,
-	CONTINUATION,
 
 	/* these are always tagged immediate values */
 	// FIXME we need 64 bit integers for device sizes

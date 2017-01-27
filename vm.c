@@ -19,32 +19,6 @@
 #include "string_type.h"
 #include "vm.h"
 
-//----------------------------------------------------------------
-// Words
-Value mk_word_like(ObjectType type, String *str)
-{
-	String *w = string_clone(str);
-	set_obj_type(w, type);
-	return mk_ref(w);
-}
-
-Value mk_symbol(String *str)
-{
-	return mk_word_like(SYMBOL, str);
-}
-
-Value mk_word(String *str)
-{
-	return mk_word_like(WORD, str);
-}
-
-Value mk_word_cstr(char *str)
-{
-	String tmp;
-	string_tmp(str, &tmp);
-	return mk_word(&tmp);
-}
-
 #if 0
 //----------------------------------------------------------------
 // Byte array
@@ -101,12 +75,12 @@ static void step_input(String *in)
 /*
  * space = whitespace | comment
  * whitespace = (' ' | <tab>)+
- * comment = '#' [^\n]*
+ * comment = ';' [^\n]*
  */
 static void consume_space(String *in)
 {
 	while (more_input(in)) {
-		if (*in->b == '#') {
+		if (*in->b == ';') {
 			do {
 				step_input(in);
 			} while (more_input(in) && *in->b != '\n');
@@ -116,54 +90,8 @@ static void consume_space(String *in)
 				step_input(in);
 			} while (more_input(in) && isspace(*in->b));
 		} else
-			return;
+			break;
 	}
-}
-
-static bool scan_fixnum(String *in, Token *result)
-{
-	int n = 0;
-
-	result->str.b = in->b;
-	while (more_input(in) && isdigit(*in->b)) {
-		n *= 10;
-		n += *in->b - '0'; /* FIXME: assumes ascii */
-		step_input(in);
-	}
-
-	if (more_input(in) && !isspace(*in->b)) {
-		while (more_input(in) && !isspace(*in->b))
-			step_input(in);
-
-		result->str.e = in->b;
-		result->type = TOK_WORD;
-
-	} else {
-		result->type = TOK_FIXNUM;
-		result->fixnum = n;
-	}
-
-	return true;
-}
-
-static bool scan_string(String *in, Token *result)
-{
-	result->type = TOK_STRING;
-	step_input(in);
-	result->str.b = in->b;
-
-	// FIXME: support escapes
-	while (more_input(in) && *in->b != '\"')
-		step_input(in);
-
-	result->str.e = in->b;
-
-	if (!more_input(in))
-		error("bad string");
-
-	step_input(in);
-
-	return true;
 }
 
 static bool is_sym_char(char c)
@@ -172,54 +100,123 @@ static bool is_sym_char(char c)
 	return !isspace(c) && !strchr(special, c);
 }
 
-static bool scan_sym(String *in, Token *result)
+static Token scan_sym(String *in)
 {
-	result->type = TOK_SYM;
-	result->str.b = in->b;
+	Token tok;
+	tok.type = TOK_SYM;
+	tok.str.b = in->b;
 
 	while (more_input(in) && is_sym_char(*in->b))
 		step_input(in);
 
-	result->str.e = in->b;
-	return true;
+	tok.str.e = in->b;
+	return tok;
 }
 
-static bool mk_punc(String *in, Token *result, char c, TokenType t)
+// This may return a symbol
+static Token scan_fixnum(String *in)
 {
-	if (*in->b != c)
-		return false;
+	int n = 0;
+	Token tok;
 
-	result->type = t;
-	result->str.b = in->b;
+	tok.type = TOK_FIXNUM;
+
+	tok.str.b = in->b;
+	while (more_input(in) && isdigit(*in->b)) {
+		n *= 10;
+		n += *in->b - '0';
+		step_input(in);
+	}
+	tok.str.e = in->b;
+	tok.fixnum = n;
+
+	if (more_input(in) && is_sym_char(*in->b)) {
+		// Symbols may begin with digits.
+		while (more_input(in) && is_sym_char(*in->b))
+			step_input(in);
+
+		tok.str.e = in->b;
+		tok.type = TOK_SYM;
+	}
+
+	return tok;
+}
+
+static Token scan_string(String *in)
+{
+	Token tok;
+
+	tok.type = TOK_STRING;
 	step_input(in);
-	result->str.e = in->b;
-	return true;
+	tok.str.b = in->b;
+
+	// FIXME: support escapes
+	while (more_input(in) && *in->b != '\"')
+		step_input(in);
+
+	tok.str.e = in->b;
+
+	if (!more_input(in))
+		error("bad string");
+
+	step_input(in);
+	return tok;
+}
+
+static bool is_punc(char c, TokenType *result)
+{
+	switch (c) {
+	case '(':
+		*result = TOK_OPEN;
+		return true;
+
+	case ')':
+		*result = TOK_CLOSE;
+		return true;
+
+	case '\'':
+		*result = TOK_QUOTE;
+		return true;
+
+	case '.':
+		*result = TOK_DOT;
+		return true;
+
+	default:
+		return false;
+	}
+
+	return false;
 }
 
 static Token scan(String *in)
 {
+	Token r;
+	TokenType tt;
+
 	if (!more_input(in))
-		return false;
+		return (Token) {TOK_EOF};
 
 	consume_space(in);
 
 	if (!more_input(in))
-		return false;
+		return (Token) {TOK_EOF};
 
 	if (isdigit(*in->b))
-		return scan_fixnum(in, result);
+		return scan_fixnum(in);
 
 	else if (*in->b == '\"')
-		return scan_string(in, result);
+		return scan_string(in);
 
-	else if (mk_punc(in, '(', TOK_OPEN, result) ||
-		 mk_punc(in, ')', TOK_CLOSE, result) ||
-		 mk_punc(in, '\'', TOK_QUOTE, result) ||
-		 mk_punc(in, '.', TOK_DOT, result))
-		return true;
+	else if (is_punc(*in->b, &tt)) {
+		r.type = tt;
+		r.str.b = in->b;
+		step_input(in);
+		r.str.e = in->b;
+		return r;
 
-	else
-		return scan_sym(in, result);
+	} else
+		return scan_sym(in);
 }
 
 typedef struct {
@@ -251,27 +248,30 @@ static void shift(TokenStream *ts)
 static bool read_list(TokenStream *ts, Value *result);
 static bool read_quote(TokenStream *ts, Value *result);
 
-static bool read(TokenStream *ts, Value *result)
+// FIXME: remove this
+static Symbol *symbol_root = NULL;
+
+static bool _read(TokenStream *ts, Value *result)
 {
 	Token *tok = peek(ts);
 
 	if (tok->type == TOK_EOF)
 		return false;
 
-	switch (tok.type) {
+	switch (tok->type) {
 	case TOK_FIXNUM:
-		shift(ts);
 		*result = mk_fixnum(tok->fixnum);
+		shift(ts);
 		break;
 
 	case TOK_STRING:
+		*result = mk_ref(string_clone(&tok->str));
 		shift(ts);
-		*result = mk_string(tok->str);
 		break;
 
 	case TOK_SYM:
+		*result = mk_symbol(&symbol_root, &tok->str);
 		shift(ts);
-		*result = mk_symbol(tok->str);
 		break;
 
 	case TOK_OPEN:
@@ -299,7 +299,7 @@ static bool read_list(TokenStream *ts, Value *result)
 	for (;;) {
 		if (tok->type == TOK_DOT) {
 			// FIXME: finish
-			error("lazy programmer hasn't implemented dotted lists");
+			error("lazy programmer; no dotted lists");
 
 		} else if (tok->type == TOK_CLOSE) {
 			shift(ts);
@@ -307,8 +307,7 @@ static bool read_list(TokenStream *ts, Value *result)
 			return true;
 
 		} else {
-			bool r = read(ts, result);
-			if (!read(ts, result))
+			if (!_read(ts, result))
 				error("malformed list; unexpected eof");
 			lb_append(&lb, *result);
 		}
@@ -323,9 +322,9 @@ static bool read_quote(TokenStream *ts, Value *result)
 	ListBuilder lb;
 
 	lb_init(&lb);
-	lb_append(&lb, mk_symbol("quote"));
+	lb_append(&lb, mk_symbol(&symbol_root, string_clone_cstr("quote")));
 
-	if (!read(in, result))
+	if (!_read(ts, result))
 		error("malformed quote; unexpected eof");
 
 	lb_append(&lb, *result);
@@ -520,81 +519,36 @@ void eval(VM *vm, Array *code)
 }
 #endif
 
-static Value eval(Value sexp)
+static Value eval(VM *vm, Value sexp)
 {
 	return sexp;
 }
 
 //----------------------------------------------------------------
 // Print
-static void print_continuation(FILE *stream, Continuation *k);
+
+static void print_string_unquoted(FILE *stream, String *str)
+{
+	const char *ptr;
+	for (ptr = str->b; ptr != str->e; ptr++)
+		fputc(*ptr, stream);
+}
 
 void print_string(FILE *stream, String *str)
 {
-	const char *ptr;
-
 	fputc('\"', stream);
-	for (ptr = str->b; ptr != str->e; ptr++)
-		fputc(*ptr, stream);
+	print_string_unquoted(stream, str);
 	fputc('\"', stream);
 }
 
-static void print_array_like(FILE *stream, Array *a, char b, char e)
+static void print_symbol(FILE *stream, Symbol *sym)
 {
-	unsigned i;
-
-	fprintf(stream, "%c ", b);
-	for (i = 0; i < a->nr_elts; i++) {
-		print_value(stream, array_get(a, i));
-		fprintf(stream, " ");
-	}
-	fprintf(stream, "%c", e);
+	print_string_unquoted(stream, sym->str);
 }
 
-static void print_array(FILE *stream, Array *a)
-{
-	print_array_like(stream, a, '{', '}');
-}
+static void print_list(FILE *stream, Value v);
 
-static void print_quot(FILE *stream, Array *a)
-{
-	print_array_like(stream, a, '[', ']');
-}
-
-#if 0
-static void print_tuple(FILE *stream, struct tuple *t)
-{
-	// FIXME: print out the class
-	print_array_like(stream, t, '|', '|');
-}
-#endif
-
-static void print_word(FILE *stream, String *w)
-{
-	const char *ptr;
-
-	for (ptr = w->b; ptr != w->e; ptr++)
-		fputc(*ptr, stream);
-}
-
-static void print_namespace_entry(void *ctxt, String *k, Value v)
-{
-	FILE *stream = ctxt;
-	fprintf(stream, "{ ");
-	print_word(stream, k);
-	fprintf(stream, " ");
-	print_value(stream, v);
-	fprintf(stream, " } ");
-}
-
-static void print_namespace(FILE *stream, struct namespace *ns)
-{
-	fprintf(stream, "H{ ");
-	namespace_visit(ns, print_namespace_entry, stream);
-	fprintf(stream, "}");
-}
-
-void print_value(FILE *stream, Value v)
+static void print(FILE *stream, Value v)
 {
 	Header *h;
 
@@ -610,49 +564,20 @@ void print_value(FILE *stream, Value v)
 			error("unexpected fwd ptr");
 			break;
 
-		case NAMESPACE:
-			print_namespace(stream, v.ptr);
-			break;
-
-		case NAMESPACE_ENTRY:
-			fprintf(stream, "~namespace entry~");
-			break;
-
 		case PRIMITIVE:
 			fprintf(stream, "~primitive~");
 			break;
 
 		case STRING:
-			print_string(stream, (String *) v.ptr);
+			print_string(stream, v.ptr);
 			break;
 
-		case BYTE_ARRAY:
-			fprintf(stream, "~byte array~");
-			break;
-
-		case TUPLE:
-			//		print_tuple(stream, v.ptr);
+		case CONS:
+			print_list(stream, v);
 			break;
 
 		case SYMBOL:
-		case WORD:
-			print_word(stream, v.ptr);
-			break;
-
-		case QUOT:
-			print_quot(stream, (Array *) v.ptr);
-			break;
-
-		case ARRAY:
-			print_array(stream, (Array *) v.ptr);
-			break;
-
-		case CODE_POSITION:
-			fprintf(stream, "~code position~");
-			break;
-
-		case CONTINUATION:
-			print_continuation(stream, v.ptr);
+			print_symbol(stream, v.ptr);
 			break;
 
 		case FIXNUM:
@@ -665,43 +590,25 @@ void print_value(FILE *stream, Value v)
 		}
 		break;
 
-	case TAG_FALSE:
-		fprintf(stream, "f");
+	case TAG_NIL:
+		fprintf(stream, "()");
 		break;
 	}
 }
 
-static void red(FILE *stream)
+static void print_list(FILE *stream, Value v)
 {
-	fprintf(stream, "\x1b[31m");
-}
-
-static void green(FILE *stream)
-{
-	fprintf(stream, "\x1b[32m");
-}
-
-static void yellow(FILE *stream)
-{
-	fprintf(stream, "\x1b[33m");
-}
-
-static void white(FILE *stream)
-{
-	fprintf(stream, "\x1b[37m");
-}
-
-static void print_stack(FILE *stream, VM *vm, Array *a)
-{
-	unsigned i;
-
-	fprintf(stream, "\n--- Data stack:\n");
-	for (i = 0; i < a->nr_elts; i++) {
-		print_value(stream, array_get(a, i));
-		fprintf(stream, "\n");
+	fprintf(stream, "(");
+	while (is_cons(v)) {
+		print(stream, car(v));
+		v = cdr(v);
+		if (is_cons(v))
+			fprintf(stream, " ");
 	}
+	fprintf(stream, ")");
 }
 
+#if 0
 static void print_continuation(FILE *stream, Continuation *k)
 {
 	unsigned f, i;
@@ -728,12 +635,13 @@ static void print_continuation(FILE *stream, Continuation *k)
 		fprintf(stream, "\n");
 	}
 }
-
+#endif
 //----------------------------------------------------------------
 // Loop
 
 static void throw(void)
 {
+#if 0
 	if (global_vm->handling_error) {
 		fprintf(stderr, "error whilst handling error, aborting");
 		abort();
@@ -750,6 +658,8 @@ static void throw(void)
 		fprintf(stderr, "no error handler, exiting\n");
 		exit(1);
 	}
+#endif
+	exit(1);
 }
 
 void error(const char *format, ...)
@@ -762,10 +672,9 @@ void error(const char *format, ...)
 
 	fprintf(stderr, "\n");
 
-	print_continuation(stderr, global_vm->k);
 	throw();
 }
-
+#if 0
 static void load_file(VM *vm, const char *path)
 {
 	int fd;
@@ -792,7 +701,7 @@ static void load_file(VM *vm, const char *path)
 	munmap(input.b, info.st_size);
 	close(fd);
 }
-
+#endif
 // Read a string, and return a pointer to it.  Returns NULL on EOF.
 const char *rl_gets()
 {
@@ -816,9 +725,11 @@ const char *rl_gets()
 static int repl(VM *vm)
 {
 	const char *buffer;
+	TokenStream stream;
 	String input;
+	Value v;
 
-	global_vm = vm;
+	//global_vm = vm;
 	for (;;) {
 		buffer = rl_gets();
 		if (!buffer)
@@ -826,9 +737,12 @@ static int repl(VM *vm)
 
 		input.b = buffer;
 		input.e = buffer + strlen(buffer);
-		stream_init(&stream, &input);
-		while (read(ts, &v))
-			print(eval(vm, v));
+		stream_init(&input, &stream);
+		while (_read(&stream, &v)) {
+			printf("=> ");
+			print(stdout, eval(vm, v));
+			printf("\n");
+		}
 	}
 
 	return 0;
@@ -840,17 +754,18 @@ int main(int argc, char **argv)
 	VM vm;
 
 	GC_INIT();
-	init_vm(&vm);
-	def_basic_primitives(&vm);
-	def_dm_primitives(&vm);
+//	init_vm(&vm);
+//	def_basic_primitives(&vm);
+//	def_dm_primitives(&vm);
 
 	//load_file(&vm, "prelude.dm");
-
+#if 0
 	if (argc > 1)
 		for (i = 1; i < argc; i++)
 			load_file(&vm, argv[i]);
 	else
-		repl(&vm);
+#endif
+	repl(&vm);
 
 	printf("\n\ntotal allocated: %llu\n",
 	       (unsigned long long) get_memory_stats()->total_allocated);

@@ -154,7 +154,7 @@ Value clone_value(Value v)
 	return mk_ref(clone(as_ref(v)));
 }
 
-Value mk_false(void)
+Value mk_nil()
 {
 	Value v;
 	v.i = TAG_NIL;

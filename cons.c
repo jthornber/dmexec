@@ -20,6 +20,11 @@ Cons *cons(Value car, Value cdr)
 	return cell;
 }
 
+bool is_cons(Value v)
+{
+	return get_type(v) == CONS;
+}
+
 void lb_init(ListBuilder *lb)
 {
 	lb->head = lb->tail = NULL;
@@ -28,9 +33,10 @@ void lb_init(ListBuilder *lb)
 void lb_append(ListBuilder *lb, Value v)
 {
 	Cons *new_cell = cons(v, mk_nil());
-	if (lb->head)
+	if (lb->head) {
 		lb->tail->cdr = mk_ref(new_cell);
-	else
+		lb->tail = new_cell;
+	} else
 		lb->head = lb->tail = new_cell;
 }
 

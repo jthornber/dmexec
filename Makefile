@@ -21,13 +21,10 @@ LIBS=\
 	-lgc
 
 SOURCE=\
-	array.c \
 	cons.c \
-	basic_primitives.c \
-	dm-primitives.c \
 	mm.c \
-	namespace.c \
 	string_type.c \
+	symbol.c \
 	utils.c \
 	vm.c \
 
@@ -54,5 +51,9 @@ clean:
 dmexec: $(OBJECTS)
 	@echo "    [LD]  $@"
 	$(V) $(CC) $(CFLAGS) -o $@ $+ $(LIBS)
+
+# Making this depend on OBJECTS as a quick way of picking up the .h deps.
+tags: $(OBJECTS)
+	ctags -a --sort=yes *.[hc]
 
 -include $(DEPENDS)

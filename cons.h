@@ -1,6 +1,8 @@
 #ifndef DMEXEC_CONS_H
 #define DMEXEC_CONS_H
 
+#include <stdbool.h>
+
 #include "mm.h"
 
 /*----------------------------------------------------------------*/
@@ -18,6 +20,8 @@ Value cdr(Value cell);
 void set_car(Value cell, Value new_car);
 void set_cdr(Value cell, Value new_cdr);
 Cons *cons(Value car, Value cdr);
+
+bool is_cons(Value v);
 
 /*----------------------------------------------------------------*/
 
