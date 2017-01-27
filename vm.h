@@ -74,8 +74,16 @@ Value mk_word_cstr(char *str);
 
 void print_string(FILE *stream, String *str);
 
+Value eval(VM *vm, Value sexp);
 
-void inc_pc(void);
+typedef struct {
+	String *in;
+	Token tok;
+} TokenStream;
+
+void stream_init(String *in, TokenStream *ts);
+bool read_sexp(TokenStream *ts, Value *result);
+void print(FILE *stream, Value v);
 
 /*----------------------------------------------------------------*/
 

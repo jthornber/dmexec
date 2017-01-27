@@ -22,11 +22,14 @@ LIBS=\
 
 SOURCE=\
 	cons.c \
+	eval.c \
+	main.c \
 	mm.c \
+	print.c \
+	read.c \
 	string_type.c \
 	symbol.c \
 	utils.c \
-	vm.c \
 
 OBJECTS:=$(subst .c,.o,$(SOURCE))
 DEPENDS:=$(subst .c,.d,$(SOURCE))
