@@ -247,7 +247,9 @@ static inline bool step(VM *vm)
 
 	case DEEP_ARGUMENT_REF:
 		assert(vm->env);
-		f_deep_get(vm->env, shift8(vm), shift8(vm));
+		rand1 = shift(8);
+		rand2 = shift(8);
+		f_deep_get(vm->env, rand1, rand2);
 		break;
 
 	case EXTEND_ENV:
@@ -327,7 +329,9 @@ static inline bool step(VM *vm)
 	case SET_DEEP_ARGUMENT_REF:
 		// FIXME: variant of this op that packs i, j into a single byte?
 		assert(vm->env);
-		f_deep_set(vm->env, shift8(vm), shift8(vm), vm->val);
+		rand1 = shift8(vm);
+		rand2 = shift8(vm);
+		f_deep_set(vm->env, rand1, rand2, vm->val);
 		break;
 
 	case SET_GLOBAL:
