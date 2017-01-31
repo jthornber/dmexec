@@ -22,6 +22,11 @@ static void out_of_memory(void)
 	error("out of memory");
 }
 
+void *untyped_zalloc(size_t s)
+{
+	return GC_MALLOC(len);
+}
+
 void *alloc(ObjectType type, size_t s)
 {
 	size_t len = s + sizeof(Header);

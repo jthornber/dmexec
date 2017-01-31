@@ -10,12 +10,12 @@ typedef struct {
 	unsigned char *b, *e, *alloc_e;
 } Thunk;
 
-static Thunk t_new(size_t alloc)
+static Thunk *t_new(size_t size)
 {
-	Thunk r;
-	r.b = untyped_zalloc(alloc);
+	Thunk *r = untyped_zalloc(sizeof(*r) + size);
+	r.b = (uint8_t *) (r + 1);
 	r.e = r.b;
-	r.alloc_e = r.b + DEFAULT_THUNK_SIZE;
+	r.alloc_e = r.b + size;
 	return r;
 }
 
@@ -43,19 +43,13 @@ static void t_append(Thunk *t, uint8_t byte)
 	t->e++ = byte;
 }
 
-static Thunk t_join(Thunk *lhs, Thunk *rhs)
+static Thunk *t_join(Thunk *lhs, Thunk *rhs)
 {
-	Thunk t = t_new(t_size(lhs) + t_size(rhs));
+	Thunk *t = t_new(t_size(lhs) + t_size(rhs));
 	memcpy(t->b, lhs->b, t_size(lhs));
 	memcpy(t->b + t_size(lhs), rhs->b, t_size(rhs));
 	t->e = t->alloc_e;
 	return t;
-}
-
-// Used as a return value in unreachable code.
-static Thunk bottom()
-{
-	return (Thunk) {};
 }
 
 //----------------------------------------------------------------
@@ -93,6 +87,12 @@ static void *pop_p(Stack *s)
 	return s->sp[s->current--].ptr;
 }
 
+static void *peek_p(Stack *s)
+{
+	assert(s->current);
+	return s->sp[s->current].ptr;
+}
+
 //----------------------------------------------------------------
 
 typedef struct _frame {
@@ -101,7 +101,7 @@ typedef struct _frame {
 	Value values[0];
 } Frame;
 
-static Frame *new_frame(unsigned count)
+static Frame *f_new(unsigned count)
 {
 	Frame *f = untyped_alloc(sizeof(*f) + count * sizeof(Value));
 	f->next = NULL;
@@ -175,11 +175,21 @@ type enum {
 	CHECKED_GLOBAL_REF,
 	CONSTANT,
 	CREATE_CLOSURE,
+
 	DEEP_ARGUMENT_REF,
-	EXTEND_ENV,
+	DEEP_ARGUMENT_SET,
+
+	ENV_EXTEND,
+	ENV_PRESERVE,
+	ENV_RESTORE,
+	ENV_UNLINK,
+
 	FINISH
 	FUNCTION_INVOKE,
+
 	GLOBAL_REF,
+	GLOBAL_SET,
+
 	GOTO,
 	INVOKE1,
 	INVOKE2,
@@ -192,15 +202,11 @@ type enum {
 	POP_FRAME,
 	POP_FUNCTION,
 	PREDEFINED,
-	PRESERVE_ENV,
 	PUSH_VALUE,
-	RESTORE_ENV,
 	RETURN,
-	SET_DEEP_ARGUMENT_REF,
-	SET_GLOBAL,
-	SET_SHALLOW_ARGUMENT,
+
 	SHALLOW_ARGUMENT_REF,
-	UNLINK_ENV,
+	SHALLOW_ARGUMENT_SET,
 } ByteOp;
 
 static inline uint8_t shift8(VM *vm)
@@ -217,14 +223,15 @@ static inline bool step(VM *vm)
 	ByteOp op = (ByteOp) shift8(vm);
 	uint8_t rand1, rand2;
 	uin16_t rand_wide;
+	Frame *f;
 
 	switch (op) {
 	case ALLOCATE_DOTTED_FRAME:
-		
+		vm->val = f_new(shift8(vm) + 1);
 		break;
 
 	case ALLOCATE_FRAME:
-		vm->val = new_frame(shift8(vm));
+		push_p(new_frame(shift8(vm)));
 		break;
 
 	case ARITY_EQ:
@@ -234,6 +241,15 @@ static inline bool step(VM *vm)
 		break;
 
 	case CALL0:
+		break;
+
+	case CALL1:
+		break;
+
+	case CALL2:
+		break;
+
+	case CALL3:
 		break;
 
 	case CHECKED_GLOBAL_REF:
@@ -253,6 +269,9 @@ static inline bool step(VM *vm)
 		break;
 
 	case EXTEND_ENV:
+		f = as_ref(vm->val);
+		f->next = vm->env;
+		vm->env = f;
 		break;
 
 	case FINISH:
@@ -284,7 +303,8 @@ static inline bool step(VM *vm)
 			vm->pc += rand16;
 		break;
 
-	case PACK_FRAME:
+	case PACK_ARG:
+		f_set(peek_p(&vm->stack), shift8(vm), vm->val);
 		break;
 
 	case POP_ARG1:
@@ -365,64 +385,179 @@ static void run(VM *vm)
 //----------------------------------------------------------------
 // Intermediate instructions
 
-static Thunk i_shallow_argument_ref(unsigned i)
+static inline void op8(Thunk *t, ByteOp op, unsigned v)
+{
+	t_append(t, (uint8_t) op);
+	assert(v < 256);
+	t_append(t, (uint8_t) v);
+}
+
+static inline void op8_8(Thunk *t, ByteOp op, unsigned i, unsigned j)
+{
+	t_append(t, (uint8_t) op);
+	assert(i < 256);
+	t_append(t, (uint8_t) i);
+	assert(j < 256);
+	t_append(t, (uint8_t) j);
+}
+
+static inline void op16(Thunk *t, ByteOp op, unsigned v)
+{
+	t_append(t, (uint8_t) op);
+	assert(v < 256 * 256);
+	t_append(t, (uint8_t) v >> 8);
+	t_append(t, (uint8_t) v & 0xff);
+}
+
+static Thunk *i_shallow_argument_ref(unsigned i)
+{
+	Thunk *t = t_new(2);
+	op8(t, SHALLOW_ARGUMENT_REF, i);
+	return t;
+}
+
+static Thunk *i_shallow_argument_set(unsigned i, Thunk *val)
+{
+	Thunk *t = t_new(t_size(val) + 2);
+	t_merge(t, val);
+	op8(t, SHALLOW_ARGUMENT_SET, i);
+	return t;
+}
+
+static Thunk *i_deep_argument_ref(unsigned i, unsigned j)
+{
+	Thunk *t = t_new(3);
+	op8_8(t, DEEP_ARGUMENT_REF, i, j);
+	return t;
+}
+
+static Thunk *i_deep_argument_set(unsigned i, unsigned j, Thunk *val)
+{
+	Thunk *t = t_new(t_size(val) + 3);
+	t_merge(t, val);
+	op8_8(t, DEEP_ARGUMENT_SET, i, j);
+	return t;
+}
+
+static Thunk *i_checked_global_ref(unsigned i)
+{
+	Thunk *t = t_new(3);
+	op16(t, GLOBAL_REF, i);
+	return t;
+}
+
+static Thunk *i_global_set(unsigned i, Thunk *val)
+{
+	Thunk *t = t_new(t_size(val) + 3);
+	t_merge(t, val);
+	op16(t, GLOBAL_SET, i);
+	return t;
+}
+
+static Thunk *i_predefined(unsigned i)
+{
+	Thunk *t = t_new(3);
+	op16(t, PREDEFINED, i);
+	return t;
+}
+
+static Thunk *i_constant(Value v)
+{
+	unsigned i = add_constant(v);
+
+	Thunk *t = t_new(3);
+	op16(t, CONSTANT, i);
+	return t;
+}
+
+static Thunk *i_alternative(Thunk *t1, Thunk *t2, Thunk *t3)
+{
+	Thunk *t = t_new(t_size(t1) + t_size(t2) + t_size(t3) + 20);
+	t_merge(t, t1);
+	op16(t, JUMP_FALSE, t_size(t2) + 1);
+	t_merge(t, t2);
+	op16(t, GOTO, t_size(t3));
+	t_merge(t, t3);
+	return t;
+}
+
+static Thunk *i_sequence(Thunk *t1, Thunk *t2)
+{
+	Thunk *t = t_new(t_size(t1) + t_size(t2));
+	t_merge(t, t1);
+	t_merge(t, t2);
+	return t;
+}
+
+static Thunk *i_fix_closure(Thunk *t, unsigned arity)
+{
+	Thunk *t, *fn;
+
+	fn = t_new(t_size(body) + 20);
+	op8(fn, ARITY_EQ, arity);
+	op8(fn, PACK_FRAME, arity);
+	op(fn, EXTEND_ENV);
+	t_merge(fn, body);
+	op(fn, RETURN);
+
+	t = t_new(t_size(fn) + 10);
+	op8(t, CREATE_CLOSURE, 1);
+	op16(t, GOTO, t_size(fn));
+	t_merge(t, fn);
+	return t;
+}
+
+static Thunk *i_nary_closure(Thunk *body, unsigned arity)
+{
+	Thunk *t, *fn;
+
+	fn = t_new(t_size(body) + 20);
+	op8(fn, ARITY_GEQ, arity + 1);
+	op8(fn, PACK_FRAME, arity);
+	op(fn, EXTEND_ENV);
+	t_merge(fn, body);
+	op(fn, RETURN);
+
+	t = t_new(t_size(fn) + 10);
+	op8(t, CREATE_CLOSURE, 1);
+	op16(t, GOTO, t_size(fn));
+	t_merge(t, fn);
+	return t;
+}
+
+static Thunk *i_regular_call(Thunk *fn, Thunk *args)
+{
+	Thunk *t = t_new(t_size(fn) + t_size(args) + 20);
+	t_merge(t, fn); // leaves fn in vm->val, where fn is a closure
+	op(t, PUSH_VALUE);
+	t_merge(t, args);
+	op(t, PRESERVE_ENV);
+	// now we need to set the env from a closure
+
+}
+
+static Thunk *i_tr_regular_call(Thunk *fn, Thunk *args)
 {
 
 }
 
-static Thunk i_shallow_argument_set(unsigned i, Thunk t)
+static Thunk *i_pack_args(unsigned argc, Thunk **args)
 {
+	Thunk *t;
+	unsigned i, tot = 0;
 
-}
+	for (i = 0; i < argc; i++)
+		tot += t_size(args[i]);
 
-static Thunk i_deep_argument_ref(unsigned i, unsigned j)
-{
+	t = t_new(tot + argc * 2 + 3);
+	op8(t, ALLOCATE_FRAME, argc);
+	for (i = 0; i < argc; i++) {
+		t_merge(args[i]);
+		op8(t, PACK_ARG, i);
+	}
+	op(t, POP_VALUE);
 
-}
-
-static Thunk i_deep_argument_set(unsigned i, unsigned j, Thunk t)
-{
-
-}
-
-static Thunk i_checked_global_ref(unsigned i)
-{
-
-}
-
-static Thunk i_global_set(unsigned i, Thunk t)
-{
-
-}
-
-static Thunk i_predefined(unsigned i)
-{
-
-}
-
-static Thunk i_constant(Value v)
-{
-
-}
-
-static Thunk i_alternative(Thunk t1, Thunk t2, Thunk t3)
-{
-
-}
-
-static Thunk i_sequence(Thunk t1, Thunk t2)
-{
-
-}
-
-static Thunk i_fix_closure(Thunk t, unsigned arity)
-{
-
-}
-
-static Thunk i_nary_closure(Thunk t, unsigned arity)
-{
-
+	return t;
 }
 
 //----------------------------------------------------------------
@@ -451,12 +586,12 @@ static Kind compute_kind(StaticEnv *r, Symbol *sym)
 //----------------------------------------------------------------
 // Compilation
 
-static Thunk c_quotation(Value v, StaticEnv *r, bool tail)
+static Thunk *c_quotation(Value v, StaticEnv *r, bool tail)
 {
 	return i_constant(v);
 }
 
-static Thunk c_reference(Value n, StaticEnv *r, bool tail)
+static Thunk *c_reference(Value n, StaticEnv *r, bool tail)
 {
 	Kind k = compute_kind(r, as_ref(n));
 	switch (k->t) {
@@ -474,9 +609,9 @@ static Thunk c_reference(Value n, StaticEnv *r, bool tail)
 	}
 }
 
-static Thunk c_assignment(Value n, Value e, SaticEnv *r, bool tail)
+static Thunk *c_assignment(Value n, Value e, SaticEnv *r, bool tail)
 {
-	Thunk t = compile(e, r, false);
+	Thunk *t = compile(e, r, false);
 	Kind k = compute_kind(r, n);
 
 	switch (k->t) {
@@ -491,29 +626,29 @@ static Thunk c_assignment(Value n, Value e, SaticEnv *r, bool tail)
 
 	case KindPredefined:
 		error("Predefined variables are immutable.");
-		return bottom();
+		return NULL;
 	}
 }
 
-static Thunk c_alternative(Value e1, Value e2, Value e3, StaticEnv *r, bool tail)
+static Thunk *c_alternative(Value e1, Value e2, Value e3, StaticEnv *r, bool tail)
 {
-	Thunk t1 = compile(e1, r, false);
-	Thunk t2 = compile(e2, r, tail);
-	Thunk t3 = compile(e3, r, tail);
+	Thunk *t1 = compile(e1, r, false);
+	Thunk *t2 = compile(e2, r, tail);
+	Thunk *t3 = compile(e3, r, tail);
 
 	return i_alternative(t1, t2, t3);
 }
 
-static Thunk c_sequence(Value es, StaticEnv *r, bool tail);
-static Thunk c_multiple_seq(Value e, Value es, StaticEnv *r, bool tail)
+static Thunk *c_sequence(Value es, StaticEnv *r, bool tail);
+static Thunk *c_multiple_seq(Value e, Value es, StaticEnv *r, bool tail)
 {
-	Thunk t1 = compile(e);
-	Thunk t2 = c_sequence(es, r, tail);
+	Thunk *t1 = compile(e);
+	Thunk *t2 = c_sequence(es, r, tail);
 
 	return i_sequence(t1, t2);
 }
 
-static Thunk c_sequence(Value es, StaticEnv *r, bool tail)
+static Thunk *c_sequence(Value es, StaticEnv *r, bool tail)
 {
 	if (is_cons(es)) {
 		if (is_cons(cdr(es)))
@@ -523,28 +658,28 @@ static Thunk c_sequence(Value es, StaticEnv *r, bool tail)
 	}
 
 	error("bad sequence");
-	return bottom();
+	return NULL;
 }
 
-static Thunk c_fix_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
+static Thunk *c_fix_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 {
 	unsigned arity = len(ns);
 	StaticEnv *r2 = r_extend(r, ns);
-	Thunk t = c_sequence(es, r2, true);
+	Thunk *t = c_sequence(es, r2, true);
 
 	return i_fix_closure(t, arity);
 }
 
-static Thunk c_dotted_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
+static Thunk *c_dotted_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 {
 	unsigned arity = len(ns) - 1; // extra param is already on here
 	StaticEnv *r2 = r_extend(r, ns);
-	Thunk t = c_sequence(es, r2, tail);
+	Thunk *t = c_sequence(es, r2, tail);
 
 	return i_nary_closure(t, arity);
 }
 
-static Thunk c_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
+static Thunk *c_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 {
 	ListBuilder lb;
 	lb_init(&lb);
@@ -563,8 +698,34 @@ static Thunk c_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 	}
 }
 
-static Thunk c_application(Value e, Value es, StaticEnv *r, bool tail)
+static Thunk *c_args(Values es, StaticEnv *r, bool tail)
 {
+	// We're not supporting call/cc, so we can allocate the frame first.
+	unsigned argc = len(es);
+	Thunk *args[argc]; // Variable length arrays are in c99
+
+	for (i = 0; i < argc, i++) {
+		args[i] = compile(car(es), r, false);
+		es = cdr(es);
+	}
+
+	return i_pack_args(argc, args);
+}
+
+static Thunk *c_regular_application(Value e, Value es, StaticEnv *r, bool tail)
+{
+	Thunk *fn = compile(e, r, false);
+	Thunk *args = c_args(es, r, false);
+
+	if (tail)
+		return i_tr_regular_call(fn, args);
+	else
+		return i_regular_call(fn, args);
+}
+
+static Thunk *c_application(Value e, Value es, StaticEnv *r, bool tail)
+{
+	// FIXME: check es is a proper list
 	if (is_symbol(e)) {
 		Kind k = compute_kind(r, as_ref(e));
 		switch (k->t) {
@@ -574,18 +735,21 @@ static Thunk c_application(Value e, Value es, StaticEnv *r, bool tail)
 			break;
 
 		case KindPrimitive:
-			// FIXME: check hte primitive is a function
+			// FIXME: check the primitive is a function
 			return c_primitive_application(e, es, r, tail);
 		}
 
-	} else if (is_cons(e) && is_symbol(car(e)) && as_ref(car(e)) == LAMBDA_SYMBOL) {
-		
-	}
+	} else if (is_cons(e) && is_symbol(car(e)) &&
+		   as_ref(car(e)) == LAMBDA_SYMBOL)
+		return c_closed_application(e, es, r, tail);
+
+	else
+		return c_regular_application(e, es, r, tail);
 }
 
 // We assume that symbols can use ptr comparison.  Probably will always be
 // true.
-Thunk compile(Value e, StaticEnv *r, bool tail)
+Thunk *compile(Value e, StaticEnv *r, bool tail)
 {
 	if (is_cons(e)) {
 		if (is_symbol(car(e))) {
@@ -620,7 +784,6 @@ Thunk compile(Value e, StaticEnv *r, bool tail)
 
 Value eval(VM *vm, Value sexp)
 {
-
 	return sexp;
 }
 

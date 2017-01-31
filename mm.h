@@ -25,6 +25,7 @@ typedef struct {
 	unsigned magic;
 } Header;
 
+void *untyped_zalloc(size_t s);
 void *alloc(ObjectType type, size_t s);
 void *zalloc(ObjectType type, size_t s);
 void *clone(void *obj);
