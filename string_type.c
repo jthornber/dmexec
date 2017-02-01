@@ -50,7 +50,7 @@ int string_cmp(String *lhs, String *rhs)
 	return 0;
 }
 
-int string_cmp_cstr(String *lhs, char *rhs)
+int string_cmp_cstr(String *lhs, const char *rhs)
 {
 	String tmp;
 	string_tmp(rhs, &tmp);

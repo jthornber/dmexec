@@ -8,6 +8,7 @@
 typedef enum {
 	FORWARD,
 	PRIMITIVE,
+	CLOSURE,
 	STRING,
 	SYMBOL,
 	CONS,
@@ -25,6 +26,7 @@ typedef struct {
 	unsigned magic;
 } Header;
 
+void *untyped_alloc(size_t s);
 void *untyped_zalloc(size_t s);
 void *alloc(ObjectType type, size_t s);
 void *zalloc(ObjectType type, size_t s);

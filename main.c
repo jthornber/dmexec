@@ -173,7 +173,6 @@ static int repl(VM *vm)
 
 int main(int argc, char **argv)
 {
-	unsigned i;
 	VM vm;
 
 	GC_INIT();

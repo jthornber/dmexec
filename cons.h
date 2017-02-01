@@ -12,16 +12,23 @@ typedef struct {
   Value cdr;
 } Cons;
 
-extern Value Nil;
-
 Value car(Value cell);
+Value cadr(Value cell);
+Value caddr(Value cell);
+Value cadddr(Value cell);
 Value cdr(Value cell);
 
 void set_car(Value cell, Value new_car);
 void set_cdr(Value cell, Value new_cdr);
 Cons *cons(Value car, Value cdr);
 
+static inline bool is_nil(Value v) {
+	return get_tag(v) == TAG_NIL;
+}
+
 bool is_cons(Value v);
+
+unsigned list_len(Value v);
 
 /*----------------------------------------------------------------*/
 

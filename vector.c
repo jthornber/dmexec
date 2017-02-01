@@ -1,4 +1,4 @@
-#include "array.h"
+#include "vector.h"
 
 #include "error.h"
 #include "utils.h"

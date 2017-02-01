@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <setjmp.h>
 
-#include "array.h"
+#include "vector.h"
 #include "cons.h"
 #include "error.h"
 #include "list.h"
@@ -43,11 +43,28 @@ typedef struct _symbol {
 	String *str;
 } Symbol;
 
-typedef struct {
-	Symbol *symbols_root;
+#define MAX_STACK 4096
 
-	jmp_buf eval_loop;
-	bool handling_error;	// FIXME: is this needed?
+typedef struct {
+	unsigned current;
+	Value sp[MAX_STACK];
+} Stack;
+
+typedef struct _frame {
+	struct _frame *next;
+	unsigned nr;
+	Value values[0];
+} Frame;
+
+typedef struct vm {
+	uint8_t *pc, *pc_end;
+
+	Value val;
+	Frame *env;
+	Value fun;
+	Value arg1;
+	Value arg2;
+	Stack stack;
 } VM;
 
 // Rather than constantly pass the single vm instance around I'm going to

@@ -60,6 +60,10 @@ void print(FILE *stream, Value v)
 			fprintf(stream, "~boxed fixnum?!~");
 			break;
 
+		case CLOSURE:
+			fprintf(stream, "~closure~");
+			break;
+
 		case NIL:
 			fprintf(stream, "()");
 			break;

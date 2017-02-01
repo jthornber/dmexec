@@ -24,7 +24,12 @@ static void out_of_memory(void)
 
 void *untyped_zalloc(size_t s)
 {
-	return GC_MALLOC(len);
+	return GC_MALLOC(s);
+}
+
+void *untyped_alloc(size_t s)
+{
+	return GC_MALLOC(s);
 }
 
 void *alloc(ObjectType type, size_t s)

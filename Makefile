@@ -56,7 +56,7 @@ dmexec: $(OBJECTS)
 	$(V) $(CC) $(CFLAGS) -o $@ $+ $(LIBS)
 
 # Making this depend on OBJECTS as a quick way of picking up the .h deps.
-tags: $(OBJECTS)
+tags:
 	ctags -a --sort=yes *.[hc]
 
 -include $(DEPENDS)

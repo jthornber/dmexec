@@ -19,7 +19,7 @@ String *string_clone(String *str);
 String *string_clone_cstr(const char *str);
 
 int string_cmp(String *lhs, String *rhs);
-int string_cmp_cstr(String *lhs, char *rhs);
+int string_cmp_cstr(String *lhs, const char *rhs);
 
 //----------------------------------------------------------------
 
