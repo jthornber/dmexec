@@ -9,13 +9,6 @@
 //----------------------------------------------------------------
 // Thunks
 
-// FIXME: slow, implement a ropes library
-#define DEFAULT_THUNK_SIZE 16
-
-typedef struct {
-	unsigned char *b, *e, *alloc_e;
-} Thunk;
-
 static Thunk *t_new(size_t size)
 {
 	Thunk *r = untyped_zalloc(sizeof(*r) + size);
@@ -131,11 +124,12 @@ static void f_deep_set(Frame *f, unsigned depth, unsigned index, Value v)
 //----------------------------------------------------------------
 // Closure
 
-// We don't need to store the arity or nary status since that gets hard coded
-// into the byte code.
+// We don't need to store the arity or nary status since that gets compiled
+// into the thunk; the thunk knows how to prepare the frame from the stack
+// contents.
+// FIXME: if we're doing it this way then call/cc is back on the table.
 typedef struct {
-	// We only need code_e for the disassembly
-	uint8_t *code_b, *code_e;
+	Thunk code;
 	Frame *env;
 } Closure;
 
@@ -190,38 +184,42 @@ typedef enum {
 	VALUE_PUSH,
 } ByteOp;
 
-static inline uint8_t shift8(VM *vm)
+static inline ByteOp shift_op(Thunk *t)
 {
-	if (vm->pc >= vm->pc_end)
-		error("ran off the end of the bytecode");
-
-	return *vm->pc++;
+	return (ByteOp) *t->b++;
 }
 
-static inline uint16_t shift16(VM *vm)
+static inline uint8_t shift8(Thunk *t)
 {
-	uint16_t r = shift8(vm);
+	if (t->b >= t->e)
+		error("ran off the end of the bytecode");
+
+	return *t->b++;
+}
+
+static inline uint16_t shift16(Thunk *t)
+{
+	uint16_t r = shift8(t);
 	r = r << 8;
-	r |= shift8(vm);
+	r |= shift8(t);
 	return r;
 }
 
 // Returns false if program exits
 static inline bool step(VM *vm)
 {
-	ByteOp op = (ByteOp) shift8(vm);
 	uint8_t i, j;
 	uint16_t ij;
 	Frame *f;
 	Closure *c;
 
-	switch (op) {
+	switch (shift_op(vm->code)) {
 	case ALLOCATE_DOTTED_FRAME:
-		vm->val = mk_ref(f_new(shift8(vm) + 1));
+		vm->val = mk_ref(f_new(shift8(vm->code) + 1));
 		break;
 
 	case ALLOCATE_FRAME:
-		push_p(&vm->stack, f_new(shift8(vm)));
+		push_p(&vm->stack, f_new(shift8(vm->code)));
 		break;
 
 	case ARITY_EQ:
@@ -249,19 +247,19 @@ static inline bool step(VM *vm)
 		break;
 
 	case CREATE_CLOSURE:
-		i = shift8(vm);
-		j = shift16(vm);
+		i = shift8(vm->code);
+		j = shift16(vm->code);
 		c = alloc(CLOSURE, sizeof(*c));
-		c->code_b = vm->pc + i;
-		c->code_e = vm->pc + j;
+		c->code.b = vm->code->b + i;
+		c->code.e = vm->code->b + j;
 		c->env = vm->env;
 		vm->val = mk_ref(c);
 		break;
 
 	case DEEP_ARGUMENT_REF:
 		assert(vm->env);
-		i = shift8(vm);
-		j = shift8(vm);
+		i = shift8(vm->code);
+		j = shift8(vm->code);
 		f_deep_get(vm->env, i, j);
 		break;
 
@@ -279,20 +277,20 @@ static inline bool step(VM *vm)
 		break;
 
 	case GOTO:
-		vm->pc += shift16(vm);
+		vm->code->b += shift16(vm->code);
 		break;
 
 	case INVOKE:
 		break;
 
 	case JUMP_FALSE:
-		ij = shift16(vm);
+		ij = shift16(vm->code);
 		if (is_nil(vm->val))
-			vm->pc += ij;
+			vm->code->b += ij;
 		break;
 
 	case PACK_ARG:
-		f_set(peek_p(&vm->stack), shift8(vm), vm->val);
+		f_set(peek_p(&vm->stack), shift8(vm->code), vm->val);
 		break;
 
 	case POP_ARG1:
@@ -337,8 +335,8 @@ static inline bool step(VM *vm)
 	case DEEP_ARGUMENT_SET:
 		// FIXME: variant of this op that packs i, j into a single byte?
 		assert(vm->env);
-		i = shift8(vm);
-		j = shift8(vm);
+		i = shift8(vm->code);
+		j = shift8(vm->code);
 		f_deep_set(vm->env, i, j, vm->val);
 		break;
 
@@ -347,12 +345,12 @@ static inline bool step(VM *vm)
 
 	case SHALLOW_ARGUMENT_SET:
 		assert(vm->env);
-		f_set(vm->env, shift8(vm), vm->val);
+		f_set(vm->env, shift8(vm->code), vm->val);
 		break;
 
 	case SHALLOW_ARGUMENT_REF:
 		assert(vm->env);
-		vm->val = f_get(vm->env, shift8(vm));
+		vm->val = f_get(vm->env, shift8(vm->code));
 		break;
 
 	case ENV_UNLINK:
@@ -377,6 +375,151 @@ static unsigned add_constant(Value v)
 {
 	// FIXME: finish
 	return 0;
+}
+
+static void disassemble(Thunk *t)
+{
+	switch (shift_op(t)) {
+	case ALLOCATE_DOTTED_FRAME:
+		printf("allocate_dotted_frame");
+		break;
+
+	case ALLOCATE_FRAME:
+		printf("allocate_frame");
+		break;
+
+	case ARITY_EQ:
+		printf("arity_eq");
+		break;
+
+	case ARITY_GEQ:
+		printf("arity_geq");
+		break;
+
+	case CALL0:
+		printf("call0");
+		break;
+
+	case CALL1:
+		printf("call1");
+		break;
+
+	case CALL2:
+		printf("call2");
+		break;
+
+	case CALL3:
+	     	printf("call3");
+		break;
+
+	case CHECKED_GLOBAL_REF:
+		printf("checked_global_ref");
+		break;
+
+	case CONSTANT:
+		printf("constant");
+		break;
+
+	case CREATE_CLOSURE:
+		printf("create_closure");
+		break;
+
+	case DEEP_ARGUMENT_REF:
+		printf("deep_argument_ref");
+		break;
+
+	case DEEP_ARGUMENT_SET:
+		printf("deep_argument_set");
+		break;
+
+	case ENV_EXTEND:
+		printf("env_extend");
+		break;
+
+	case ENV_PRESERVE:
+		printf("env_preserve");
+		break;
+
+	case ENV_RESTORE:
+		printf("env_restore");
+		break;
+
+	case ENV_UNLINK:
+		printf("env_unlink");
+		break;
+
+	case FINISH:
+		printf("finish");
+		break;
+
+	case GLOBAL_REF:
+		printf("global_ref");
+		break;
+
+	case GLOBAL_SET:
+		printf("global_set");
+		break;
+
+	case GOTO:
+		printf("goto");
+		break;
+
+	case INVOKE:
+		printf("invoke");
+		break;
+
+	case JUMP_FALSE:
+		printf("jump_false");
+		break;
+
+	case PACK_ARG:
+		printf("pack_arg");
+		break;
+
+	case POP_ARG1:
+		printf("pop_arg1");
+		break;
+
+	case POP_ARG2:
+		printf("pop_arg2");
+		break;
+
+	case POP_CONS_FRAME:
+		printf("pop_cons_frame");
+		break;
+
+	case POP_FRAME:
+		printf("pop_frame");
+		break;
+
+	case POP_FUNCTION:
+		printf("pop_function");
+		break;
+
+	case PREDEFINED:
+		printf("predefined");
+		break;
+
+	case RETURN:
+		printf("return");
+		break;
+
+	case SHALLOW_ARGUMENT_REF:
+		printf("shallow_argument_ref");
+		break;
+
+	case SHALLOW_ARGUMENT_SET:
+		printf("shallow_argument_set");
+		break;
+
+	case VALUE_POP:
+		printf("value_pop");
+		break;
+
+	case VALUE_PUSH:
+		printf("value_push");
+		break;
+	}
 }
 
 //----------------------------------------------------------------
@@ -840,6 +983,9 @@ Thunk *compile(Value e, StaticEnv *r, bool tail)
 
 Value eval(VM *vm, Value sexp)
 {
+	Thunk *t = compile(sexp, NULL, true);
+	disassemble(t);
+
 	return sexp;
 }
 

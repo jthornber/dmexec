@@ -5,6 +5,7 @@
 
 //----------------------------------------------------------------
 
+// Update type_desc() if you change this.
 typedef enum {
 	FORWARD,
 	PRIMITIVE,

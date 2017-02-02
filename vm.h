@@ -56,8 +56,12 @@ typedef struct _frame {
 	Value values[0];
 } Frame;
 
+typedef struct {
+	unsigned char *b, *e, *alloc_e;
+} Thunk;
+
 typedef struct vm {
-	uint8_t *pc, *pc_end;
+	Thunk *code;
 
 	Value val;
 	Frame *env;

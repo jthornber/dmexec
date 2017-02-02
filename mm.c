@@ -186,10 +186,26 @@ bool is_false(Value v)
 	return v.i == NIL;
 }
 
+static const char *type_desc(ObjectType t)
+{
+	static const char *strs[] = {
+		"forward",
+		"primitive",
+		"closure",
+		"string",
+		"symbol",
+		"cons",
+		"nil",
+		"fixnum"
+	};
+
+	return strs[t];
+}
+
 void *as_type(ObjectType t, Value v)
 {
 	if (get_type(v) != t)
-		error("type error: expected type %d.", t);
+		error("type error: expected type '%s'.", type_desc(t));
 
 	return as_ref(v);
 }
