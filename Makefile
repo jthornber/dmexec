@@ -22,6 +22,7 @@ LIBS=\
 
 SOURCE=\
 	cons.c \
+	env.c \
 	eval.c \
 	main.c \
 	mm.c \

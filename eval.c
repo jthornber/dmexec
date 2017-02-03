@@ -1,4 +1,5 @@
 #include "cons.h"
+#include "env.h"
 #include "symbol.h"
 #include "vm.h"
 
@@ -371,7 +372,7 @@ static void run(VM *vm)
 		;
 }
 
-static unsigned add_constant(Value v)
+static unsigned add_constant(StaticEnv *r, Value v)
 {
 	// FIXME: finish
 	return 0;
@@ -379,6 +380,8 @@ static unsigned add_constant(Value v)
 
 static void disassemble(Thunk *t)
 {
+	printf("    ");
+
 	switch (shift_op(t)) {
 	case ALLOCATE_DOTTED_FRAME:
 		printf("allocate_dotted_frame");
@@ -417,7 +420,7 @@ static void disassemble(Thunk *t)
 		break;
 
 	case CONSTANT:
-		printf("constant");
+		printf("constant %u", shift8(t));
 		break;
 
 	case CREATE_CLOSURE:
@@ -616,10 +619,8 @@ static Thunk *i_predefined(unsigned i)
 	return t;
 }
 
-static Thunk *i_constant(Value v)
+static Thunk *i_constant(unsigned i)
 {
-	unsigned i = add_constant(v);
-
 	Thunk *t = t_new(3);
 	op16(t, CONSTANT, i);
 	return t;
@@ -723,43 +724,9 @@ static Thunk *i_pack_args(unsigned argc, Thunk **args)
 //----------------------------------------------------------------
 // Static Environment
 
-typedef struct {
-
-} StaticEnv;
-
-static StaticEnv *r_extend(StaticEnv *r, Value ns)
-{
-	// FIXME: finish
-	return r;
-}
-
 static bool symbol_eq(Symbol *sym, const char *name)
 {
 	return string_cmp_cstr(sym->str, name) == 0;
-}
-
-//----------------------------------------------------------------
-// We can classify variables into three kinds:
-// Local i, j where i is the frame depth, and j is the value index.
-// Global i where i is an index into a global array.
-// Predefined i where i is an index into an array of predefined (constant) values.
-
-typedef enum {
-	KindLocal,
-	KindGlobal,
-	KindPredefined
-} KindType;
-
-typedef struct {
-	KindType t;
-	unsigned i, j;
-} Kind;
-
-static Kind compute_kind(StaticEnv *r, Symbol *sym)
-{
-	error("not implemented");
-	// FIXME: finish
-	return (Kind) {KindLocal, 0, 0};
 }
 
 //----------------------------------------------------------------
@@ -770,7 +737,8 @@ Thunk *compile(Value e, StaticEnv *r, bool tail);
 
 static Thunk *c_quotation(Value v, StaticEnv *r, bool tail)
 {
-	return i_constant(v);
+	unsigned i = add_constant(r, v);
+	return i_constant(i);
 }
 
 static Thunk *c_reference(Value n, StaticEnv *r, bool tail)
@@ -984,7 +952,10 @@ Thunk *compile(Value e, StaticEnv *r, bool tail)
 Value eval(VM *vm, Value sexp)
 {
 	Thunk *t = compile(sexp, NULL, true);
+
+	printf("disassembly:\n");
 	disassemble(t);
+	printf("\n\n");
 
 	return sexp;
 }

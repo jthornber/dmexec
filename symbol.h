@@ -9,7 +9,7 @@
 
 static inline bool is_symbol(Value v)
 {
-	return as_type(SYMBOL, v) != NULL;
+	return get_type(v) == SYMBOL;
 }
 
 //----------------------------------------------------------------

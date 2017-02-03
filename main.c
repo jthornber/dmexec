@@ -162,7 +162,6 @@ static int repl(VM *vm)
 		input.e = buffer + strlen(buffer);
 		stream_init(&input, &stream);
 		while (read_sexp(&stream, &v)) {
-			printf("=> ");
 			print(stdout, eval(vm, v));
 			printf("\n");
 		}

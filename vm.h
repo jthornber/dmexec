@@ -71,6 +71,21 @@ typedef struct vm {
 	Stack stack;
 } VM;
 
+typedef struct {
+	struct __static_frame *prev;
+	Symbol *syms[];
+} StaticFrame;
+
+#define MAX_CONSTANTS 1024
+typedef struct {
+	// FIXME: I'm not sure if the constants should be in here, or in the
+	// vm.
+	unsigned nr_constants;
+	Value constants[MAX_CONSTANTS];
+
+	StaticFrame *frames;
+} StaticEnv;
+
 // Rather than constantly pass the single vm instance around I'm going to
 // use a global.  Supporting error recovery meant the vm would have to be
 // passed into practically every function eg. array_pop().  This global is
