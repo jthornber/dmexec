@@ -17,6 +17,7 @@ Value cadr(Value cell);
 Value caddr(Value cell);
 Value cadddr(Value cell);
 Value cdr(Value cell);
+Value cddr(Value cell);
 
 void set_car(Value cell, Value new_car);
 void set_cdr(Value cell, Value new_cdr);

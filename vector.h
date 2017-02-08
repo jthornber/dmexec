@@ -1,38 +1,21 @@
-#ifndef DMEXEC_ARRAY_H
-#define DMEXEC_ARRAY_H
+#ifndef DMEXEC_VECTOR_H
+#define DMEXEC_VECTOR_H
 
 #include "mm.h"
 
 //----------------------------------------------------------------
 
-typedef struct {
-	unsigned nr_elts;
-	unsigned nr_allocated;
-} Array;
+struct __vector;
+typedef struct __vector Vector;
 
-Array *array_create(void);
-Array *quot_create(void);
+Vector *v_alloc();
 
-// Clones the values (but no deeper)
-Array *array_deep_clone(Array *a);
+Value v_ref(Vector *v, unsigned i);
 
-Array *array_resize(Array *old, unsigned new_nr_alloc);
-
-Value array_get(Array *a, unsigned i);
-void array_set(Array *a, unsigned i, Value v);
-
-Array *array_push(Array *a, Value v);
-Value array_pop(Array *a);
-
-Value array_peek(Array *a);
-Value array_peekn(Array *a, unsigned n);
-
-Array *array_unshift(Array *a, Value v);
-Value array_shift(Array *a);
-
-Array *array_concat(Array *a, Array *a2);
-
-void array_reverse(Array *a);
+// Immutable operations are the default
+Vector *v_set(Vector *v, unsigned i, Value val);
+Vector *v_resize(Vector *v, unsigned new_size, Value init);
+Vector *v_append(Vector *v, Value val);
 
 //----------------------------------------------------------------
 

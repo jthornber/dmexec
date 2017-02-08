@@ -246,9 +246,10 @@ static bool read_list(TokenStream *ts, Value *result)
 			return true;
 
 		} else {
-			if (!read_sexp(ts, result))
+			Value result2;
+			if (!read_sexp(ts, &result2))
 				error("malformed list; unexpected eof");
-			lb_append(&lb, *result);
+			lb_append(&lb, result2);
 		}
 	}
 
@@ -258,15 +259,16 @@ static bool read_list(TokenStream *ts, Value *result)
 
 static bool read_quote(TokenStream *ts, Value *result)
 {
+	Value result2;
 	ListBuilder lb;
 
 	lb_init(&lb);
 	lb_append(&lb, mk_symbol(&symbol_root, string_clone_cstr("quote")));
 
-	if (!read_sexp(ts, result))
+	if (!read_sexp(ts, &result2))
 		error("malformed quote; unexpected eof");
 
-	lb_append(&lb, *result);
+	lb_append(&lb, result2);
 	*result = lb_get(&lb);
 	return true;
 }

@@ -12,8 +12,9 @@
 
 static Thunk *t_new(size_t size)
 {
-	Thunk *r = untyped_zalloc(sizeof(*r) + size);
-	r->b = (uint8_t *) (r + 1);
+	Thunk *r = untyped_zalloc(sizeof(*r));
+
+	r->b = untyped_alloc(size);
 	r->e = r->b;
 	r->alloc_e = r->b + size;
 	return r;
@@ -24,10 +25,12 @@ static size_t t_size(Thunk *t)
 	return t->e - t->b;
 }
 
+// The next two functions can realloc t->b, so don't use them after doing any
+// shift operations.
 static void t_append(Thunk *t, uint8_t byte)
 {
 	if (t->e == t->alloc_e) {
-		size_t old_len = t->alloc_e - t->b;
+		size_t old_len = t->e - t->b;
 		// FIXME: make sure this throws an exception or calls error on
 		// failure.
 		t->b = realloc(t->b, 2 * old_len);
@@ -38,13 +41,21 @@ static void t_append(Thunk *t, uint8_t byte)
 	*t->e++ = byte;
 }
 
-static Thunk *t_merge(Thunk *lhs, Thunk *rhs)
+static void t_merge(Thunk *t, Thunk *rhs)
 {
-	Thunk *t = t_new(t_size(lhs) + t_size(rhs));
-	memcpy(t->b, lhs->b, t_size(lhs));
-	memcpy(t->b + t_size(lhs), rhs->b, t_size(rhs));
-	t->e = t->alloc_e;
-	return t;
+	unsigned remaining = t->alloc_e - t->e;
+	unsigned extra = t_size(rhs);
+
+	if (remaining < extra) {
+		unsigned old_size = t_size(t);
+		unsigned new_size = t_size(t) + t_size(rhs) * 2;
+		t->b = realloc(t->b, new_size);
+		t->e = t->b + old_size;
+		t->alloc_e = t->b + new_size;
+	}
+
+	memcpy(t->e, rhs->b, extra);
+	t->e += extra;
 }
 
 //----------------------------------------------------------------
@@ -162,11 +173,13 @@ typedef enum {
 
 	FINISH,
 
+	FUN_INVOKE,
+	FUN_POP,
+
 	GLOBAL_REF,
 	GLOBAL_SET,
 
 	GOTO,
-	INVOKE,
 
 	JUMP_FALSE,
 	PACK_ARG,
@@ -174,7 +187,6 @@ typedef enum {
 	POP_ARG2,
 	POP_CONS_FRAME,
 	POP_FRAME,
-	POP_FUNCTION,
 	PREDEFINED,
 	RETURN,
 
@@ -274,14 +286,18 @@ static inline bool step(VM *vm)
 		return false;
 		break;
 
+	case FUN_INVOKE:
+		break;
+
+	case FUN_POP:
+		vm->fun = pop_v(&vm->stack);
+		break;
+
 	case GLOBAL_REF:
 		break;
 
 	case GOTO:
 		vm->code->b += shift16(vm->code);
-		break;
-
-	case INVOKE:
 		break;
 
 	case JUMP_FALSE:
@@ -309,9 +325,6 @@ static inline bool step(VM *vm)
 		f = as_ref(vm->val);
 		f->next = vm->env;
 		vm->env = f;
-		break;
-
-	case POP_FUNCTION:
 		break;
 
 	case PREDEFINED:
@@ -378,21 +391,26 @@ static unsigned add_constant(StaticEnv *r, Value v)
 	return 0;
 }
 
-static void disassemble(Thunk *t)
+static bool dis_instr(Thunk *t, StaticEnv *r)
 {
+	unsigned i, j;
+
+	if (t->b >= t->e)
+		return false;
+
 	printf("    ");
 
 	switch (shift_op(t)) {
 	case ALLOCATE_DOTTED_FRAME:
-		printf("allocate_dotted_frame");
+		printf("allocate_dotted_frame %u", shift8(t));
 		break;
 
 	case ALLOCATE_FRAME:
-		printf("allocate_frame");
+		printf("allocate_frame %u", shift8(t));
 		break;
 
 	case ARITY_EQ:
-		printf("arity_eq");
+		printf("arity_eq %u", shift8(t));
 		break;
 
 	case ARITY_GEQ:
@@ -424,7 +442,9 @@ static void disassemble(Thunk *t)
 		break;
 
 	case CREATE_CLOSURE:
-		printf("create_closure");
+		i = shift8(t);
+		j = shift16(t);
+		printf("create_closure %u %u", i, j);
 		break;
 
 	case DEEP_ARGUMENT_REF:
@@ -455,6 +475,10 @@ static void disassemble(Thunk *t)
 		printf("finish");
 		break;
 
+	case FUN_POP:
+		printf("fun_pop");
+		break;
+
 	case GLOBAL_REF:
 		printf("global_ref");
 		break;
@@ -464,10 +488,10 @@ static void disassemble(Thunk *t)
 		break;
 
 	case GOTO:
-		printf("goto");
+		printf("goto %u", shift16(t));
 		break;
 
-	case INVOKE:
+	case FUN_INVOKE:
 		printf("invoke");
 		break;
 
@@ -495,10 +519,6 @@ static void disassemble(Thunk *t)
 		printf("pop_frame");
 		break;
 
-	case POP_FUNCTION:
-		printf("pop_function");
-		break;
-
 	case PREDEFINED:
 		printf("predefined");
 		break;
@@ -508,7 +528,7 @@ static void disassemble(Thunk *t)
 		break;
 
 	case SHALLOW_ARGUMENT_REF:
-		printf("shallow_argument_ref");
+		printf("shallow_argument_ref %u", shift8(t));
 		break;
 
 	case SHALLOW_ARGUMENT_SET:
@@ -523,6 +543,16 @@ static void disassemble(Thunk *t)
 		printf("value_push");
 		break;
 	}
+	printf("\n");
+
+	return true;
+}
+
+// Passing the static env in so we can add informative comments.
+static void disassemble(Thunk *t, StaticEnv *r)
+{
+	while (dis_instr(t, r))
+		;
 }
 
 //----------------------------------------------------------------
@@ -684,21 +714,21 @@ static Thunk *i_regular_call(Thunk *fn, Thunk *args)
 	t_merge(t, fn); // leaves fn in vm->val, where fn is a closure
 	op(t, VALUE_PUSH);
 	t_merge(t, args);
+	op(t, FUN_POP);
 	op(t, ENV_PRESERVE);
-	op(t, INVOKE);
+	op(t, FUN_INVOKE);
+	op(t, ENV_RESTORE);
 	return t;
 }
 
 static Thunk *i_tr_regular_call(Thunk *fn, Thunk *args)
 {
-	// FIXME: this isn't right
 	Thunk *t = t_new(t_size(fn) + t_size(args) + 20);
 	t_merge(t, fn);
 	op(t, VALUE_PUSH);
-	op(t, POP_FRAME);
 	t_merge(t, args);
-	op(t, ENV_PRESERVE);
-	op(t, INVOKE);
+	op(t, FUN_POP);
+	op(t, FUN_INVOKE);
 	return t;
 }
 
@@ -712,6 +742,7 @@ static Thunk *i_pack_args(unsigned argc, Thunk **args)
 
 	t = t_new(tot + argc * 2 + 3);
 	op8(t, ALLOCATE_FRAME, argc);
+	op(t, VALUE_PUSH);
 	for (i = 0; i < argc; i++) {
 		t_merge(t, args[i]);
 		op8(t, PACK_ARG, i);
@@ -816,18 +847,24 @@ static Thunk *c_sequence(Value es, StaticEnv *r, bool tail)
 
 static Thunk *c_fix_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 {
+	Thunk *t;
 	unsigned arity = list_len(ns);
-	StaticEnv *r2 = r_extend(r, ns);
-	Thunk *t = c_sequence(es, r2, true);
+
+	r_push_names(r, ns);
+	t = c_sequence(es, r, true);
+	r_pop_names(r);
 
 	return i_fix_closure(t, arity);
 }
 
 static Thunk *c_dotted_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 {
+	Thunk *t;
 	unsigned arity = list_len(ns) - 1; // extra param is already on here
-	StaticEnv *r2 = r_extend(r, ns);
-	Thunk *t = c_sequence(es, r2, tail);
+
+	r_push_names(r, ns);
+	t = c_sequence(es, r, tail);
+	r_pop_names(r);
 
 	return i_nary_closure(t, arity);
 }
@@ -853,7 +890,6 @@ static Thunk *c_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 
 static Thunk *c_args(Value es, StaticEnv *r, bool tail)
 {
-	// We're not supporting call/cc, so we can allocate the frame first.
 	unsigned i, argc = list_len(es);
 	Thunk *args[argc]; // Variable length arrays are in c99
 
@@ -884,8 +920,15 @@ static Thunk *c_closed_application(Value e, Value es, StaticEnv *r, bool tail)
 
 static Thunk *c_primitive_application(Value e, Value es, StaticEnv *r, bool tail)
 {
-	// FIXME: finish
-	return NULL;
+	unsigned i, argc = list_len(es);
+	Thunk *args[argc];
+
+	for (i = 0; i < argc; i++) {
+		args[i] = compile(car(es), r, false);
+		es = cdr(es);
+	}
+
+	
 }
 
 static Thunk *c_application(Value e, Value es, StaticEnv *r, bool tail)
@@ -925,7 +968,7 @@ Thunk *compile(Value e, StaticEnv *r, bool tail)
 				return c_quotation(cadr(e), r, tail);
 
 			else if (symbol_eq(s, "lambda"))
-				return c_abstraction(cadr(e), caddr(e), r, tail);
+				return c_abstraction(cadr(e), cddr(e), r, tail);
 
 			else if (symbol_eq(s, "if"))
 				return c_alternative(cadr(e), caddr(e), cadddr(e),
@@ -951,10 +994,11 @@ Thunk *compile(Value e, StaticEnv *r, bool tail)
 
 Value eval(VM *vm, Value sexp)
 {
-	Thunk *t = compile(sexp, NULL, true);
+	StaticEnv *r = r_alloc();
+	Thunk *t = compile(sexp, r, true);
 
 	printf("disassembly:\n");
-	disassemble(t);
+	disassemble(t, r);
 	printf("\n\n");
 
 	return sexp;

@@ -19,7 +19,7 @@ Value mk_symbol(Symbol **root, String *str)
 {
 	Symbol **r = lookup(root, str);
 	if (!(*r)) {
-		Symbol *new = zalloc(SYMBOL, sizeof(*r));
+		Symbol *new = zalloc(SYMBOL, sizeof(*new));
 		new->left = new->right = NULL;
 		new->str = string_clone(str);
 		*r = new;

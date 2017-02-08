@@ -17,7 +17,6 @@
 
 typedef struct {
 	struct list_head list;
-	Array *code;
 	unsigned position;
 } CodePosition;
 
@@ -40,6 +39,9 @@ typedef struct {
 
 typedef struct _symbol {
 	struct _symbol *left, *right;
+	// FIXME: store globals in separate hash table
+	bool global_set;
+	Value global;
 	String *str;
 } Symbol;
 
@@ -71,32 +73,19 @@ typedef struct vm {
 	Stack stack;
 } VM;
 
-typedef struct {
-	struct __static_frame *prev;
-	Symbol *syms[];
-} StaticFrame;
-
-#define MAX_CONSTANTS 1024
-typedef struct {
-	// FIXME: I'm not sure if the constants should be in here, or in the
-	// vm.
-	unsigned nr_constants;
-	Value constants[MAX_CONSTANTS];
-
-	StaticFrame *frames;
-} StaticEnv;
-
 // Rather than constantly pass the single vm instance around I'm going to
 // use a global.  Supporting error recovery meant the vm would have to be
 // passed into practically every function eg. array_pop().  This global is
 // set during evaluation, it is _not_ set when defining primitives.
 extern VM *global_vm;
 
-typedef void (*PrimFn)(void);
-
 // FIXME: why aren't mk_{string, fixnum ...} in mm.h?
 Value mk_string(const char *b, const char *e);
-void def_primitive(VM *vm, char *k, PrimFn fn);
+
+typedef Value (*Prim0)(void);
+typedef Value (*Prim1)(Value);
+typedef Value (*Prim2)(Value, Value);
+
 
 Value mk_quot(void);
 void print_value(FILE *stream, Value v);

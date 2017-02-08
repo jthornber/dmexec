@@ -1,162 +1,179 @@
 #include "vector.h"
+#include "vm.h"
 
-#include "error.h"
-#include "utils.h"
-
+#include <stdbool.h>
 #include <string.h>
 
 //----------------------------------------------------------------
 
-Array *__array_create(unsigned nr_alloc)
+#define RADIX_SHIFT 5u
+#define RADIX_MASK ((1u << RADIX_SHIFT) - 1u)
+#define ENTRIES_PER_BLOCK (1u << RADIX_SHIFT)
+
+typedef Value *VBlock;
+
+struct __vector {
+	unsigned size;
+	unsigned cursor_index;
+
+	VBlock root;
+	VBlock cursor;
+	bool cursor_dirty;
+};
+
+Vector *v_alloc()
 {
-	Array *a = alloc(ARRAY, sizeof(*a) + sizeof(Value) * nr_alloc);
-	a->nr_elts = 0;
-	a->nr_allocated = nr_alloc;
-	return a;
+	return zalloc(VECTOR, sizeof(Vector));
 }
 
-Array *array_create(void)
+//----------------------------------------------------------------
+// Manipulating a constructed tree
+
+// FIXME: use gcc builtins to speed up.
+static inline unsigned size_to_levels_(unsigned size)
 {
-	return __array_create(4);
+	unsigned r = 0;
+	do {
+		size = size >> RADIX_SHIFT;
+		r++;
+	} while (size);
+
+	return r;
 }
 
-Array *quot_create(void)
+// leaves are level 0
+static inline unsigned level_index_(unsigned i, unsigned level)
 {
-	Array *q = __array_create(4);
-	set_obj_type(q, QUOT);
-	return q;
+	return (i >> (RADIX_SHIFT * level)) & RADIX_MASK;
 }
 
-Array *array_deep_clone(Array *a)
+// Committing the cursor doesn't change the logical state of the vector, so we
+// don't create a new Vector object.  However a new vblock spine is created
+// otherwise we'd break sharing.
+static void commit_cursor__(Vector *v)
 {
-	unsigned i;
-	Array *copy = clone(a);
+	VBlock *vb = &v->root;
+	unsigned level = size_to_levels_(v->size);
 
-	for (i = 0; i < a->nr_elts; i++)
-		array_set(copy, i, clone_value(array_get(a, i)));
+	while (--level) {
+		vb = clone(*vb);
+		vb = vb + level_index_(v->cursor_index, level);
+	}
 
-	return copy;
+	*vb = v->cursor;  // already cloned when mutated
+	v->cursor_dirty = false;
 }
 
-static inline Value *elt_ptr(Array *a, unsigned i)
+static void commit_cursor_(Vector *v)
 {
-	return ((Value *) (a + 1)) + i;
+	if (v->cursor && v->cursor_dirty)
+		commit_cursor__(v);
 }
 
-Array *array_resize(Array *a, unsigned new_nr_alloc)
+static void prep_cursor__(Vector *v, unsigned i, unsigned bi)
 {
-	Array *new = __array_create(new_nr_alloc);
+	VBlock vb = v->root;
+	unsigned level = size_to_levels_(v->size);
 
-	set_obj_type(new, get_obj_type(a));
-	memcpy(elt_ptr(new, 0), elt_ptr(a, 0), sizeof(Value) * a->nr_elts);
-	new->nr_elts = a->nr_elts;
+	while (--level)
+		vb = as_ref(vb[level_index_(i, level)]);
 
-	replace_obj(a, new);
+	v->cursor = vb;
+	v->cursor_index = bi;
+	v->cursor_dirty = false;
+}
+
+static void prep_cursor_(Vector *v, unsigned i)
+{
+	unsigned bi;
+
+	if (i > v->size)
+		error("vector index out of bounds");
+
+	bi = i >> RADIX_SHIFT;
+	if (bi != v->cursor_index) {
+		commit_cursor_(v);
+		prep_cursor__(v, i, bi);
+	}
+}
+
+Value v_ref(Vector *v, unsigned i)
+{
+	prep_cursor_(v, i);
+	return v->cursor[level_index_(i, 0)];
+}
+
+Vector *v_set(Vector *v, unsigned i, Value val)
+{
+	v = clone(v);
+	prep_cursor_(v, i);
+	v->cursor = clone(v->cursor);
+	v->cursor[level_index_(i, 0)] = val;
+	v->cursor_dirty = true;
+	return v;
+}
+
+//----------------------------------------------------------------
+// Extending a tree
+
+static VBlock insert(VBlock vb, unsigned level, unsigned i, Value val)
+{
+	VBlock new = clone(vb);
+
+	if (level == 0)
+		new[level_index(i, 0)] = val;
+	else {
+
+		new[level_index(i, level)] = mk_ref(insert(vb, level - 1, i, val));
+	}
+
 	return new;
 }
 
-static void check_bounds(Array *a, unsigned i)
+static Vector *shrink_(Vector *v, unsigned new_size)
 {
-	if (i >= a->nr_elts)
-		error("array index (%u) out of bounds (%u).", i , a->nr_elts);
+	Vector *new = clone(v);
+	commit_cursor_(new);
+	
 }
 
-Value array_get(Array *a, unsigned i)
+static Vector *grow_(Vector *v, unsigned new_size, Value init)
 {
-	check_bounds(a, i);
-	return *elt_ptr(a, i);
-}
+	// FIXME: finish
+	Vector *new = clone(v);
+	unsigned new_size = v->size + 1;
 
-void array_set(Array *a, unsigned i, Value v)
-{
-	check_bounds(a, i);
-	*elt_ptr(a, i) = v;
-}
+	// do we need to add a new level?
+	if (size_to_levels(new_size) > size_to_levels_(v->size))
+		add_level(new);
 
-Array *array_push(Array *a, Value v)
-{
-	if (a->nr_elts == a->nr_allocated)
-		a = array_resize(a, min(a->nr_elts * 2, a->nr_elts + 512));
-
-	*elt_ptr(a, a->nr_elts) = v;
-	a->nr_elts++;
-
-	return a;
-}
-
-Value array_pop(Array *a)
-{
-	Value v;
-
-	if (!a->nr_elts)
-		error("asked to pop an empty array.");
-
-	v = *elt_ptr(a, a->nr_elts - 1);
-	a->nr_elts--;
-	return v;
-}
-
-Value array_peekn(Array *a, unsigned n)
-{
-	return *elt_ptr(a, a->nr_elts - 1 - n);
-}
-
-Value array_peek(Array *a)
-{
-	return array_peekn(a, 0);
-}
-
-Array *array_unshift(Array *a, Value v)
-{
-	if (a->nr_elts == a->nr_allocated)
-		a = array_resize(a, min(a->nr_elts * 2, 512));
-
-	if (a->nr_elts)
-		memmove(elt_ptr(a, 1), elt_ptr(a, 0),
-			sizeof(Value) * a->nr_elts);
-
-	*elt_ptr(a, 0) = v;
-	a->nr_elts++;
-
-	return a;
-}
-
-Value array_shift(Array *a)
-{
-	Value v;
-
-	if (!a->nr_elts)
-		error("asked to shift an array with zero elements.");
-
-	v = *elt_ptr(a, 0);
-
-	a->nr_elts--;
-	if (a->nr_elts)
-		memmove(elt_ptr(a, 0), elt_ptr(a, 1),
-			sizeof(Value) * a->nr_elts);
-
-	return v;
-}
-
-Array *array_concat(Array *a, Array *a2)
-{
-	unsigned i;
-
-	for (i = 0; i < a2->nr_elts; i++)
-		a = array_push(a, *elt_ptr(a2, i));
-
-	return a;
-}
-
-void array_reverse(Array *a)
-{
-	Value tmp;
-
-	for (unsigned i = 0; i < a->nr_elts / 2; i++) {
-		tmp = *elt_ptr(a, i);
-		*elt_ptr(a, i) = *elt_ptr(a, a->nr_elts - i - 1);
-		*elt_ptr(a, a->nr_elts - i - 1) = tmp;
+	// do we need to add a new vblock?
+	if ((new_size & RADIX_MASK) == 1) {
+		vb = vb_alloc();
+		insert_vb(new, vb, new_size >> RADIX_SHIFT);
 	}
+
+	v->size = new_size;
+	v = prep_cursor(v, new_size - 1);
+	v->cursor[level_index(new_size - 1, 0)] = val;
+	return v;
+}
+
+Vector *v_resize(Vector *v, unsigned new_size, Value init)
+{
+	if (new_size > v->size)
+		return grow_(v, new_size, init);
+
+	else if (new_size < v->size)
+		return shrink_(v, new_size);
+
+	else
+		return v;
+}
+
+Vector *v_append(Vector *v, Value val)
+{
+	return grow_(v, v->size + 1, val);
 }
 
 //----------------------------------------------------------------

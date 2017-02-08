@@ -14,6 +14,7 @@ typedef enum {
 	SYMBOL,
 	CONS,
 	NIL,
+	VECTOR,
 
 	/* these are always tagged immediate values */
 	// FIXME we need 64 bit integers for device sizes

@@ -1,6 +1,6 @@
 #include "cons.h"
 
-/*----------------------------------------------------------------*/
+//----------------------------------------------------------------
 
 Value car(Value cell)
 {
@@ -25,6 +25,11 @@ Value cadddr(Value cell)
 Value cdr(Value cell)
 {
 	return ((Cons *) as_ref(cell))->cdr;
+}
+
+Value cddr(Value cell)
+{
+	return cdr(cdr(cell));
 }
 
 Cons *cons(Value car, Value cdr)
@@ -72,5 +77,4 @@ Value lb_get(ListBuilder *lb)
 	return lb->head ? mk_ref(lb->head) : mk_nil();
 }
 
-/*----------------------------------------------------------------*/
-
+//----------------------------------------------------------------
