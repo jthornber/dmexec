@@ -920,6 +920,7 @@ static Thunk *c_closed_application(Value e, Value es, StaticEnv *r, bool tail)
 
 static Thunk *c_primitive_application(Value e, Value es, StaticEnv *r, bool tail)
 {
+#if 0
 	unsigned i, argc = list_len(es);
 	Thunk *args[argc];
 
@@ -927,8 +928,9 @@ static Thunk *c_primitive_application(Value e, Value es, StaticEnv *r, bool tail
 		args[i] = compile(car(es), r, false);
 		es = cdr(es);
 	}
+#endif
 
-	
+	return NULL;
 }
 
 static Thunk *c_application(Value e, Value es, StaticEnv *r, bool tail)

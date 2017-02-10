@@ -67,6 +67,10 @@ void print(FILE *stream, Value v)
 		case NIL:
 			fprintf(stream, "()");
 			break;
+
+		case VECTOR:
+			fprintf(stream, "~vector~");
+			break;
 		}
 		break;
 

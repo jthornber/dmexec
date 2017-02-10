@@ -10,6 +10,7 @@ typedef struct __vector Vector;
 
 Vector *v_alloc();
 
+unsigned v_size(Vector *v);
 Value v_ref(Vector *v, unsigned i);
 
 // Immutable operations are the default

@@ -1,5 +1,6 @@
 PROGRAMS=\
-	dmexec
+	dmexec \
+	vector_t
 
 .PHONEY: all
 all: $(PROGRAMS)
@@ -24,13 +25,13 @@ SOURCE=\
 	cons.c \
 	env.c \
 	eval.c \
-	main.c \
 	mm.c \
 	print.c \
 	read.c \
 	string_type.c \
 	symbol.c \
 	utils.c \
+	vector.c
 
 OBJECTS:=$(subst .c,.o,$(SOURCE))
 DEPENDS:=$(subst .c,.d,$(SOURCE))
@@ -52,7 +53,11 @@ clean:
 	find . -name \*.d -delete
 	$(RM) $(PROGRAMS)
 
-dmexec: $(OBJECTS)
+dmexec: $(OBJECTS) main.o
+	@echo "    [LD]  $@"
+	$(V) $(CC) $(CFLAGS) -o $@ $+ $(LIBS)
+
+vector_t: $(OBJECTS) vector_t.o
 	@echo "    [LD]  $@"
 	$(V) $(CC) $(CFLAGS) -o $@ $+ $(LIBS)
 

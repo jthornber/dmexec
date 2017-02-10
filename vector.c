@@ -26,6 +26,23 @@ Vector *v_alloc()
 	return zalloc(VECTOR, sizeof(Vector));
 }
 
+unsigned v_size(Vector *v)
+{
+	return v->size;
+}
+
+#define VBLOCK_SIZE (sizeof(Value) * ENTRIES_PER_BLOCK)
+
+static VBlock vb_alloc()
+{
+	return untyped_alloc(VBLOCK_SIZE);
+}
+
+static VBlock vb_clone(VBlock vb)
+{
+	return untyped_clone(vb, VBLOCK_SIZE);
+}
+
 //----------------------------------------------------------------
 // Manipulating a constructed tree
 
@@ -56,7 +73,7 @@ static void commit_cursor__(Vector *v)
 	unsigned level = size_to_levels_(v->size);
 
 	while (--level) {
-		vb = clone(*vb);
+		*vb = vb_clone(*vb);
 		vb = vb + level_index_(v->cursor_index, level);
 	}
 
@@ -91,7 +108,7 @@ static void prep_cursor_(Vector *v, unsigned i)
 		error("vector index out of bounds");
 
 	bi = i >> RADIX_SHIFT;
-	if (bi != v->cursor_index) {
+	if (!v->cursor || bi != v->cursor_index) {
 		commit_cursor_(v);
 		prep_cursor__(v, i, bi);
 	}
@@ -107,7 +124,7 @@ Vector *v_set(Vector *v, unsigned i, Value val)
 {
 	v = clone(v);
 	prep_cursor_(v, i);
-	v->cursor = clone(v->cursor);
+	v->cursor = vb_clone(v->cursor);
 	v->cursor[level_index_(i, 0)] = val;
 	v->cursor_dirty = true;
 	return v;
@@ -115,13 +132,13 @@ Vector *v_set(Vector *v, unsigned i, Value val)
 
 //----------------------------------------------------------------
 // Extending a tree
-
+#if 0
 static VBlock insert(VBlock vb, unsigned level, unsigned i, Value val)
 {
-	VBlock new = clone(vb);
+	VBlock new = vb_clone(vb);
 
 	if (level == 0)
-		new[level_index(i, 0)] = val;
+		new[level_index_(i, 0)] = val;
 	else {
 
 		new[level_index(i, level)] = mk_ref(insert(vb, level - 1, i, val));
@@ -129,16 +146,39 @@ static VBlock insert(VBlock vb, unsigned level, unsigned i, Value val)
 
 	return new;
 }
+#endif
 
 static Vector *shrink_(Vector *v, unsigned new_size)
 {
+#if 0
 	Vector *new = clone(v);
 	commit_cursor_(new);
+#endif
+	return v;
+}
+
+// Assumes the vec has already been cloned
+static void add_leaf_(Vector *v)
+{
+	// FIXME: finish
 	
+	// For a given size, each layer needs a given number of vblocks.
+	v->root = vb_alloc();
 }
 
 static Vector *grow_(Vector *v, unsigned new_size, Value init)
 {
+	// FIXME: only grows by one entry
+	v = clone(v);
+	if (!(v->size & RADIX_MASK))
+		add_leaf_(v);
+	v->size++;
+	prep_cursor_(v, v->size - 1);
+	v->cursor = vb_clone(v->cursor);
+	v->cursor[level_index_(v->size - 1, 0)] = init;
+	v->cursor_dirty = true;
+	return v;
+#if 0
 	// FIXME: finish
 	Vector *new = clone(v);
 	unsigned new_size = v->size + 1;
@@ -157,6 +197,7 @@ static Vector *grow_(Vector *v, unsigned new_size, Value init)
 	v = prep_cursor(v, new_size - 1);
 	v->cursor[level_index(new_size - 1, 0)] = val;
 	return v;
+#endif
 }
 
 Vector *v_resize(Vector *v, unsigned new_size, Value init)

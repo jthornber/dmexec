@@ -28,8 +28,14 @@ typedef struct {
 	unsigned magic;
 } Header;
 
+// Call these two from your main to set up the garbage collection.
+void mm_init();
+void mm_exit();
+
 void *untyped_alloc(size_t s);
 void *untyped_zalloc(size_t s);
+void *untyped_clone(void *old_obj, size_t s);
+
 void *alloc(ObjectType type, size_t s);
 void *zalloc(ObjectType type, size_t s);
 void *clone(void *obj);

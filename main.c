@@ -174,7 +174,7 @@ int main(int argc, char **argv)
 {
 	VM vm;
 
-	GC_INIT();
+	mm_init();
 //	init_vm(&vm);
 //	def_basic_primitives(&vm);
 //	def_dm_primitives(&vm);
@@ -187,11 +187,7 @@ int main(int argc, char **argv)
 	else
 #endif
 	repl(&vm);
-
-	printf("\n\ntotal allocated: %llu\n",
-	       (unsigned long long) get_memory_stats()->total_allocated);
-	printf("heap size: %llu\n",
-	       (unsigned long long) GC_get_heap_size());
+	mm_exit();
 
 	return 0;
 }

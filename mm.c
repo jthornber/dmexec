@@ -17,6 +17,19 @@
 
 static MemoryStats memory_stats_;
 
+void mm_init()
+{
+	GC_INIT();
+}
+
+void mm_exit()
+{
+	printf("\n\ntotal allocated: %llu\n",
+	       (unsigned long long) get_memory_stats()->total_allocated);
+	printf("heap size: %llu\n",
+	       (unsigned long long) GC_get_heap_size());
+}
+
 static void out_of_memory(void)
 {
 	error("out of memory");
@@ -30,6 +43,13 @@ void *untyped_zalloc(size_t s)
 void *untyped_alloc(size_t s)
 {
 	return GC_MALLOC(s);
+}
+
+void *untyped_clone(void *ptr, size_t s)
+{
+	void *new = GC_MALLOC(s);
+	memcpy(new, ptr, s);
+	return new;
 }
 
 void *alloc(ObjectType type, size_t s)

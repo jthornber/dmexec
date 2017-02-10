@@ -19,10 +19,7 @@ typedef enum {
 
 typedef struct {
 	KindType t;
-	union {
-		unsigned i, j;
-		Primitive p;
-	}
+	unsigned i, j;
 
 } Kind;
 
