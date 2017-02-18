@@ -1,8 +1,18 @@
 #include "vector.h"
 #include "vm.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <string.h>
+
+//----------------------------------------------------------------
+
+// d must be a power of 2
+static unsigned div_up_pow(unsigned n, unsigned d)
+{
+	unsigned mask = d - 1;
+	return (n + mask) / d;
+}
 
 //----------------------------------------------------------------
 
@@ -50,6 +60,9 @@ static VBlock vb_clone(VBlock vb)
 static inline unsigned size_to_levels_(unsigned size)
 {
 	unsigned r = 0;
+
+	assert(size);
+	size--; // convert to a zero index
 	do {
 		size = size >> RADIX_SHIFT;
 		r++;
@@ -67,24 +80,25 @@ static inline unsigned level_index_(unsigned i, unsigned level)
 // Committing the cursor doesn't change the logical state of the vector, so we
 // don't create a new Vector object.  However a new vblock spine is created
 // otherwise we'd break sharing.
-static void commit_cursor__(Vector *v)
+static VBlock insert_cursor_(VBlock cursor, unsigned bi, VBlock vb, unsigned level)
 {
-	VBlock *vb = &v->root;
-	unsigned level = size_to_levels_(v->size);
+	if (level) {
+		vb = vb_clone(vb);
+		unsigned index = level_index_(bi, level - 1);
+		vb[index].ptr = insert_cursor_(cursor, bi, vb[index].ptr, level - 1);
+		return vb;
 
-	while (--level) {
-		*vb = vb_clone(*vb);
-		vb = vb + level_index_(v->cursor_index, level);
-	}
-
-	*vb = v->cursor;  // already cloned when mutated
-	v->cursor_dirty = false;
+	} else
+		return cursor;
 }
 
 static void commit_cursor_(Vector *v)
 {
-	if (v->cursor && v->cursor_dirty)
-		commit_cursor__(v);
+	if (v->cursor && v->cursor_dirty) {
+		unsigned levels = size_to_levels_(v->size);
+		v->root = insert_cursor_(v->cursor, v->cursor_index, v->root, levels - 1);
+		v->cursor_dirty = false;
+	}
 }
 
 static void prep_cursor__(Vector *v, unsigned i, unsigned bi)
@@ -93,7 +107,7 @@ static void prep_cursor__(Vector *v, unsigned i, unsigned bi)
 	unsigned level = size_to_levels_(v->size);
 
 	while (--level)
-		vb = as_ref(vb[level_index_(i, level)]);
+		vb = vb[level_index_(i, level)].ptr;
 
 	v->cursor = vb;
 	v->cursor_index = bi;
@@ -132,72 +146,111 @@ Vector *v_set(Vector *v, unsigned i, Value val)
 
 //----------------------------------------------------------------
 // Extending a tree
-#if 0
-static VBlock insert(VBlock vb, unsigned level, unsigned i, Value val)
-{
-	VBlock new = vb_clone(vb);
-
-	if (level == 0)
-		new[level_index_(i, 0)] = val;
-	else {
-
-		new[level_index(i, level)] = mk_ref(insert(vb, level - 1, i, val));
-	}
-
-	return new;
-}
-#endif
 
 static Vector *shrink_(Vector *v, unsigned new_size)
 {
-#if 0
-	Vector *new = clone(v);
-	commit_cursor_(new);
-#endif
 	return v;
 }
 
-// Assumes the vec has already been cloned
-static void add_leaf_(Vector *v)
+// We know the tree is going to be treated in an immutable way we can share sub
+// trees.
+static VBlock alloc_tree_(unsigned level, Value init)
 {
-	// FIXME: finish
-	
-	// For a given size, each layer needs a given number of vblocks.
-	v->root = vb_alloc();
+	Value v;
+	unsigned i;
+	VBlock vb = vb_alloc();
+
+	if (level)
+		v.ptr = alloc_tree_(level - 1, init);
+	else
+		v = init;
+
+	for (i = 0; i < ENTRIES_PER_BLOCK; i++)
+		vb[i] = v;
+
+	return vb;
+}
+
+static unsigned full_tree(unsigned levels)
+{
+	return 1u << (RADIX_SHIFT * levels);
+}
+
+static unsigned tail_entries(unsigned size, unsigned levels)
+{
+	return div_up_pow(size, full_tree(levels - 1));
+}
+
+// Copies entries from rhs to the tail block of each lhs level.
+static VBlock merge_bottom_levels_(VBlock lhs, unsigned lhs_size,
+		      	           VBlock rhs, unsigned levels)
+{
+	VBlock vb = vb_clone(lhs);
+	unsigned te = tail_entries(lhs_size, levels);
+
+	if (te != ENTRIES_PER_BLOCK)
+		memcpy(vb + te, rhs + te, sizeof(Value) * (ENTRIES_PER_BLOCK - te));
+
+	// deliberate assignment in conditional
+	if (levels && (lhs_size = lhs_size % full_tree(levels - 1))) {
+		vb[te - 1].ptr = merge_bottom_levels_(lhs[te - 1].ptr, lhs_size,
+						      rhs[te - 1].ptr, levels - 1);
+	}
+
+	return vb;
+}
+
+// Takes the left most path down rhs.
+static VBlock merge_top_levels_(VBlock lhs, unsigned lhs_size,
+				VBlock rhs, unsigned rhs_levels)
+{
+	VBlock vb = vb_clone(rhs);
+	unsigned lhs_levels = size_to_levels_(lhs_size);
+
+	if (--rhs_levels > lhs_levels)
+		vb[0].ptr = merge_top_levels_(lhs, lhs_size, rhs[0].ptr, rhs_levels);
+	else
+		vb[0].ptr = merge_bottom_levels_(lhs, lhs_size, rhs[0].ptr, rhs_levels);
+
+	return vb;
+}
+
+static VBlock merge_trees_(VBlock lhs, unsigned lhs_size,
+		 	   VBlock rhs, unsigned rhs_size)
+{
+	if (!lhs_size)
+		return rhs;
+
+	else {
+		unsigned llevels = size_to_levels_(lhs_size);
+		unsigned rlevels = size_to_levels_(rhs_size);
+
+		assert(rlevels >= llevels);
+
+		if (rlevels > llevels)
+			return merge_top_levels_(lhs, lhs_size, rhs, rlevels);
+		else
+			return merge_bottom_levels_(lhs, lhs_size, rhs, rlevels);
+	}
+}
+
+static Vector *merge_(Vector *lhs, VBlock rhs, unsigned rhs_size)
+{
+	Vector *v;
+
+	commit_cursor_(lhs);
+
+	v = clone(lhs);
+	v->root = merge_trees_(lhs->root, lhs->size, rhs, rhs_size);
+	v->size = rhs_size;
+	v->cursor = NULL;
+	return v;
 }
 
 static Vector *grow_(Vector *v, unsigned new_size, Value init)
 {
-	// FIXME: only grows by one entry
-	v = clone(v);
-	if (!(v->size & RADIX_MASK))
-		add_leaf_(v);
-	v->size++;
-	prep_cursor_(v, v->size - 1);
-	v->cursor = vb_clone(v->cursor);
-	v->cursor[level_index_(v->size - 1, 0)] = init;
-	v->cursor_dirty = true;
-	return v;
-#if 0
-	// FIXME: finish
-	Vector *new = clone(v);
-	unsigned new_size = v->size + 1;
-
-	// do we need to add a new level?
-	if (size_to_levels(new_size) > size_to_levels_(v->size))
-		add_level(new);
-
-	// do we need to add a new vblock?
-	if ((new_size & RADIX_MASK) == 1) {
-		vb = vb_alloc();
-		insert_vb(new, vb, new_size >> RADIX_SHIFT);
-	}
-
-	v->size = new_size;
-	v = prep_cursor(v, new_size - 1);
-	v->cursor[level_index(new_size - 1, 0)] = val;
-	return v;
-#endif
+	return merge_(v, alloc_tree_(size_to_levels_(new_size) - 1, init),
+		      new_size);
 }
 
 Vector *v_resize(Vector *v, unsigned new_size, Value init)

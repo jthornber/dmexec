@@ -33,26 +33,46 @@ static void t_append_once()
 
 static void t_append32()
 {
+	unsigned count = 32;
 	unsigned i = 0;
 	Vector *v = v_alloc();
 
-	for (i = 0; i < 32; i++)
+	for (i = 0; i < count; i++)
 		v = v_append(v, mk_fixnum(i));
 
-	for (i = 0; i < 32; i++)
+	for (i = 0; i < count; i++)
 		assert(equalp(v_ref(v, i), mk_fixnum(i)));
 }
 
 static void t_append_million()
 {
-	unsigned i = 0;
+	unsigned count = 1024 * 1024; // FIXME: up this to 1 million
+	unsigned i;
 	Vector *v = v_alloc();
 
-	for (i = 0; i < 1000000; i++)
+	for (i = 0; i < count; i++) {
 		v = v_append(v, mk_fixnum(i));
-
-	for (i = 0; i < 1000000; i++)
 		assert(equalp(v_ref(v, i), mk_fixnum(i)));
+	}
+
+	for (i = 0; i < count; i++)
+		assert(equalp(v_ref(v, i), mk_fixnum(i)));
+}
+
+static void t_square()
+{
+	unsigned count = 32 * 1024;
+	unsigned i;
+	Vector *v = v_alloc();
+
+	v = v_resize(v, count, mk_fixnum(0));
+	for (i = 0; i < count; i++) {
+		v = v_set(v, i, mk_fixnum(i * i));
+		assert(equalp(v_ref(v, i), mk_fixnum(i * i)));
+	}
+
+	for (i = 0; i < count; i++)
+		assert(equalp(v_ref(v, i), mk_fixnum(i * i)));
 }
 
 int main(int argc, const char *argv[])
@@ -61,6 +81,7 @@ int main(int argc, const char *argv[])
 	t_empty_vector();
 	t_append_once();
 	t_append32();
+	t_square();
 	t_append_million();
 	mm_exit();
 
