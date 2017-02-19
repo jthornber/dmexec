@@ -2,6 +2,7 @@
 #include "vm.h"
 
 #include <assert.h>
+#include <string.h>
 
 //----------------------------------------------------------------
 
@@ -77,17 +78,46 @@ static void t_square()
 		assert(equalp(v_ref(v, i), mk_fixnum(i * i)));
 }
 
+//----------------------------------------------------------------
+
+static size_t total_allocated_()
+{
+	return get_memory_stats()->total_allocated;
+}
+
+static void indent(unsigned n)
+{
+	while (n--)
+		fputc(' ', stderr);
+}
+
+static void run(const char *name, void (*fn)())
+{
+	size_t before, after;
+
+	fprintf(stderr, "%s", name);
+	indent(24 - strlen(name));
+	fprintf(stderr, "... ");
+	before = total_allocated_();
+
+	fn();
+
+	after = total_allocated_();
+	fprintf(stderr, "%llu\n", (unsigned long long) (after - before));
+}
+
 int main(int argc, const char *argv[])
 {
 	mm_init();
-	t_empty_vector();
-	t_append_once();
-	t_append32();
-	t_square();
-	t_append_million();
+	run("empty_vector", t_empty_vector);
+	run("append_once", t_append_once);
+	run("append32", t_append32);
+	run("square", t_square);
+	run("append_million", t_append_million);
 	mm_exit();
 
 	return 0;
 }
+
 //----------------------------------------------------------------
 
