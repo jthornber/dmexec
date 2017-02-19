@@ -17,13 +17,13 @@ static bool equalp(Value lhs, Value rhs)
 
 static void t_empty_vector()
 {
-	Vector *v = v_alloc();
+	Vector *v = v_empty();
 	assert(v_size(v) == 0);
 }
 
 static void t_append_once()
 {
-	Vector *v = v_alloc();
+	Vector *v = v_empty();
 	Vector *v2 = v_append(v, mk_fixnum(123));
 	assert(v2 != v);
 	assert(v_size(v2) == 1);
@@ -35,7 +35,7 @@ static void t_append32()
 {
 	unsigned count = 32;
 	unsigned i = 0;
-	Vector *v = v_alloc();
+	Vector *v = v_empty();
 
 	for (i = 0; i < count; i++)
 		v = v_append(v, mk_fixnum(i));
@@ -48,7 +48,7 @@ static void t_append_million()
 {
 	unsigned count = 1024 * 1024; // FIXME: up this to 1 million
 	unsigned i;
-	Vector *v = v_alloc();
+	Vector *v = v_empty();
 
 	for (i = 0; i < count; i++) {
 		v = v_append(v, mk_fixnum(i));
@@ -63,7 +63,7 @@ static void t_square()
 {
 	unsigned count = 32 * 1024;
 	unsigned i;
-	Vector *v = v_alloc();
+	Vector *v = v_empty();
 
 	v = v_resize(v, count, mk_fixnum(0));
 	v = v_transient_begin(v);

@@ -8,7 +8,7 @@
 struct __vector;
 typedef struct __vector Vector;
 
-Vector *v_alloc();
+Vector *v_empty();
 
 unsigned v_size(Vector *v);
 Value v_ref(Vector *v, unsigned i);
@@ -24,7 +24,7 @@ Vector *v_append(Vector *v, Value val);
  * return value will be the same as the arg.
  */
 Vector *v_transient_begin(Vector *v);
-void v_transient_end(Vector *v); 
+void v_transient_end(Vector *v);
 
 //----------------------------------------------------------------
 

@@ -32,10 +32,14 @@ struct __vector {
 	bool transient:1;
 };
 
-// FIXME: rename v_empty() ?
-Vector *v_alloc()
+Vector *v_empty()
 {
-	return zalloc(VECTOR, sizeof(Vector));
+	static Vector *empty = NULL;
+
+	if (!empty)
+		empty = zalloc(VECTOR, sizeof(Vector));
+
+	return empty;
 }
 
 static Vector *v_shadow(Vector *v)
