@@ -28,12 +28,19 @@ struct __vector {
 
 	VBlock root;
 	VBlock cursor;
-	bool cursor_dirty;
+	bool cursor_dirty:1;
+	bool transient:1;
 };
 
+// FIXME: rename v_empty() ?
 Vector *v_alloc()
 {
 	return zalloc(VECTOR, sizeof(Vector));
+}
+
+static Vector *v_shadow(Vector *v)
+{
+	return v->transient ? v : clone(v);
 }
 
 unsigned v_size(Vector *v)
@@ -134,13 +141,20 @@ Value v_ref(Vector *v, unsigned i)
 	return v->cursor[level_index_(i, 0)];
 }
 
+static void shadow_cursor_(Vector *v)
+{
+	if (!v->cursor_dirty || !v->transient) {
+		v->cursor = vb_clone(v->cursor);
+		v->cursor_dirty = true;
+	}
+}
+
 Vector *v_set(Vector *v, unsigned i, Value val)
 {
-	v = clone(v);
+	v = v_shadow(v);
 	prep_cursor_(v, i);
-	v->cursor = vb_clone(v->cursor);
+	shadow_cursor_(v);
 	v->cursor[level_index_(i, 0)] = val;
-	v->cursor_dirty = true;
 	return v;
 }
 
@@ -172,7 +186,7 @@ static VBlock trim_(VBlock vb, unsigned size, unsigned level)
 static Vector *shrink_(Vector *v, unsigned new_size)
 {
 	commit_cursor_(v);
-	v = clone(v);
+	v = v_shadow(v);
 
 	v->size = new_size;
 
@@ -262,7 +276,7 @@ static Vector *merge_(Vector *lhs, VBlock rhs, unsigned rhs_size)
 
 	commit_cursor_(lhs);
 
-	v = clone(lhs);
+	v = v_shadow(lhs);
 	v->root = merge_trees_(lhs->root, lhs->size, rhs, rhs_size);
 	v->size = rhs_size;
 	v->cursor = NULL;
@@ -293,3 +307,19 @@ Vector *v_append(Vector *v, Value val)
 }
 
 //----------------------------------------------------------------
+
+Vector *v_transient_begin(Vector *v)
+{
+	commit_cursor_(v);
+	v = clone(v);
+	v->transient = true;
+	return v;
+}
+
+void v_transient_end(Vector *v)
+{
+	v->transient = false;
+}
+
+//----------------------------------------------------------------
+

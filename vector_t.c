@@ -66,10 +66,12 @@ static void t_square()
 	Vector *v = v_alloc();
 
 	v = v_resize(v, count, mk_fixnum(0));
+	v = v_transient_begin(v);
 	for (i = 0; i < count; i++) {
 		v = v_set(v, i, mk_fixnum(i * i));
 		assert(equalp(v_ref(v, i), mk_fixnum(i * i)));
 	}
+	v_transient_end(v);
 
 	for (i = 0; i < count; i++)
 		assert(equalp(v_ref(v, i), mk_fixnum(i * i)));
