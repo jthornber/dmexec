@@ -16,7 +16,7 @@ static unsigned div_up_pow(unsigned n, unsigned d)
 
 //----------------------------------------------------------------
 
-#define RADIX_SHIFT 5u
+#define RADIX_SHIFT 4u
 #define RADIX_MASK ((1u << RADIX_SHIFT) - 1u)
 #define ENTRIES_PER_BLOCK (1u << RADIX_SHIFT)
 
@@ -145,10 +145,42 @@ Vector *v_set(Vector *v, unsigned i, Value val)
 }
 
 //----------------------------------------------------------------
-// Extending a tree
+
+static unsigned full_tree(unsigned levels)
+{
+	return 1u << (RADIX_SHIFT * levels);
+}
+
+static unsigned tail_entries(unsigned size, unsigned levels)
+{
+	return div_up_pow(size, full_tree(levels - 1));
+}
+
+static VBlock trim_(VBlock vb, unsigned size, unsigned level)
+{
+	vb = vb_clone(vb);
+	unsigned i, te = tail_entries(size, level);
+	for (i = te; i < ENTRIES_PER_BLOCK; i++)
+		vb[i] = mk_nil();
+
+	if (level && (size = size % full_tree(level - 1)))
+		vb[te - 1].ptr = trim_(vb[te - 1].ptr, size, level - 1);
+
+	return vb;
+}
 
 static Vector *shrink_(Vector *v, unsigned new_size)
 {
+	commit_cursor_(v);
+	v = clone(v);
+
+	v->size = new_size;
+
+	// Drop entries beyond new_size so they can be GCd.
+	v->root = trim_(v->root, v->size, size_to_levels_(v->size));
+	v->cursor = NULL;
+	v->cursor_dirty = false;
+
 	return v;
 }
 
@@ -169,16 +201,6 @@ static VBlock alloc_tree_(unsigned level, Value init)
 		vb[i] = v;
 
 	return vb;
-}
-
-static unsigned full_tree(unsigned levels)
-{
-	return 1u << (RADIX_SHIFT * levels);
-}
-
-static unsigned tail_entries(unsigned size, unsigned levels)
-{
-	return div_up_pow(size, full_tree(levels - 1));
 }
 
 // Copies entries from rhs to the tail block of each lhs level.
