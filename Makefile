@@ -9,6 +9,7 @@ V=
 RM:=rm -f
 CC:=gcc
 CFLAGS=\
+	-m32 \
 	-g \
 	-Wall \
 	-D_GNU_SOURCE \
@@ -18,8 +19,7 @@ INCLUDES=\
 	-I.
 
 LIBS=\
-	-lreadline \
-	-lgc
+	-lreadline
 
 SOURCE=\
 	cons.c \
