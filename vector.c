@@ -202,8 +202,8 @@ static Vector *shrink_(Vector *v, unsigned new_size)
 	return v;
 }
 
-// We know the tree is going to be treated in an immutable way we can share sub
-// trees.
+// We know the tree is going to be treated in an immutable way, so we can share
+// sub trees.
 static VBlock alloc_tree_(unsigned level, Value init)
 {
 	Value v;

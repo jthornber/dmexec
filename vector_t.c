@@ -47,7 +47,7 @@ static void t_append32()
 
 static void t_append_million()
 {
-	unsigned count = 1024 * 1024; // FIXME: up this to 1 million
+	unsigned count = 1024 * 1024;
 	unsigned i;
 	Vector *v = v_empty();
 
@@ -55,6 +55,24 @@ static void t_append_million()
 		v = v_append(v, mk_fixnum(i));
 		assert(equalp(v_ref(v, i), mk_fixnum(i)));
 	}
+
+	for (i = 0; i < count; i++)
+		assert(equalp(v_ref(v, i), mk_fixnum(i)));
+}
+
+static void t_append_million_transient()
+{
+	unsigned count = 1024 * 1024;
+	unsigned i;
+	Vector *v = v_empty();
+
+	v = v_transient_begin(v);
+	v = v_resize(v, count, mk_fixnum(0));
+	for (i = 0; i < count; i++) {
+		v_set(v, i, mk_fixnum(i));
+		assert(equalp(v_ref(v, i), mk_fixnum(i)));
+	}
+	v_transient_end(v);
 
 	for (i = 0; i < count; i++)
 		assert(equalp(v_ref(v, i), mk_fixnum(i)));
@@ -114,6 +132,7 @@ int main(int argc, const char *argv[])
 	run("append32", t_append32);
 	run("square", t_square);
 	run("append_million", t_append_million);
+	run("append_million_transient", t_append_million_transient);
 	mm_exit();
 
 	return 0;
