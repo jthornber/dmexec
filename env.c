@@ -5,14 +5,14 @@
 //----------------------------------------------------------------
 
 StaticEnv *r_alloc() {
-	StaticEnv *r = untyped_zalloc(sizeof(*r));
+	StaticEnv *r = mm_zalloc(STATIC_ENV, sizeof(*r));
 	return r;
 }
 
 void r_push_names(StaticEnv *r, Value ns)
 {
 	unsigned i = 0, len = list_len(ns);
-	StaticFrame *f = untyped_alloc(sizeof(*f) + sizeof(Symbol *) * len);
+	StaticFrame *f = mm_alloc(STATIC_FRAME, sizeof(*f) + sizeof(Symbol *) * len);
 	f->nr_syms = len;
 	while (is_cons(ns)) {
 		f->syms[i++] = as_type(SYMBOL, car(ns));

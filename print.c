@@ -26,20 +26,13 @@ static void print_list(FILE *stream, Value v);
 
 void print(FILE *stream, Value v)
 {
-	Header *h;
-
 	switch (get_tag(v)) {
 	case TAG_FIXNUM:
 		fprintf(stream, "%d", as_fixnum(v));
 		break;
 
 	case TAG_REF:
-		h = get_header(v);
-		switch (h->type) {
-		case FORWARD:
-			error("unexpected fwd ptr");
-			break;
-
+		switch (get_type(v)) {
 		case PRIMITIVE:
 			fprintf(stream, "~primitive~");
 			break;
@@ -70,6 +63,30 @@ void print(FILE *stream, Value v)
 
 		case VECTOR:
 			fprintf(stream, "~vector~");
+			break;
+
+		case VBLOCK:
+			fprintf(stream, "~vblock~");
+			break;
+
+		case STATIC_ENV:
+			fprintf(stream, "~static-env~");
+			break;
+
+		case STATIC_FRAME:
+			fprintf(stream, "~static-frame~");
+			break;
+
+		case FRAME:
+			fprintf(stream, "~frame~");
+			break;
+
+		case THUNK:
+			fprintf(stream, "~thunk~");
+			break;
+
+		case RAW:
+			fprintf(stream, "~raw~");
 			break;
 		}
 		break;

@@ -37,14 +37,14 @@ Vector *v_empty()
 	static Vector *empty = NULL;
 
 	if (!empty)
-		empty = zalloc(VECTOR, sizeof(Vector));
+		empty = mm_zalloc(VECTOR, sizeof(Vector));
 
 	return empty;
 }
 
 static Vector *v_shadow(Vector *v)
 {
-	return v->transient ? v : clone(v);
+	return v->transient ? v : mm_clone(v);
 }
 
 unsigned v_size(Vector *v)
@@ -56,12 +56,13 @@ unsigned v_size(Vector *v)
 
 static VBlock vb_alloc()
 {
-	return untyped_alloc(VBLOCK_SIZE);
+	return mm_alloc(VBLOCK, VBLOCK_SIZE);
 }
 
+// FIXME: remove
 static VBlock vb_clone(VBlock vb)
 {
-	return untyped_clone(vb, VBLOCK_SIZE);
+	return mm_clone(vb);
 }
 
 //----------------------------------------------------------------
@@ -315,7 +316,7 @@ Vector *v_append(Vector *v, Value val)
 Vector *v_transient_begin(Vector *v)
 {
 	commit_cursor_(v);
-	v = clone(v);
+	v = mm_clone(v);
 	v->transient = true;
 	return v;
 }

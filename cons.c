@@ -1,4 +1,5 @@
 #include "cons.h"
+#include "mm.h"
 
 //----------------------------------------------------------------
 
@@ -34,7 +35,7 @@ Value cddr(Value cell)
 
 Cons *cons(Value car, Value cdr)
 {
-	Cons *cell = alloc(CONS, sizeof(*cell));
+	Cons *cell = mm_alloc(CONS, sizeof(*cell));
 	cell->car = car;
 	cell->cdr = cdr;
 	return cell;

@@ -4,30 +4,78 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 #define HEADER_MAGIC 846219U
 
 #include "error.h"
+#include "list.h"
 #include "string_type.h"
 
 //----------------------------------------------------------------
 // Memory manager
 
-// FIXME: use the valgrind api to allow it to check for accesses to garbage
+
+// I'm using a slab allocator combined with mark and lazy sweep collector.
+//
+// There are separate slabs for each object type.  This lets us avoid storing
+// a header for every object, saving a lot of memory and simplifying the
+// granularity for the mark bitsets.
+//
+// Mark and sweep avoids copying, but may suffer from fragmentation.  I'm
+// hoping that since we use so much immutable data the fragmentation wont be so
+// bad.
+//
+// Marking is performed in a bitset allocated on the side.  Better cache
+// locality.
+//
+// Blocks are fixed size chunks of memory that get divided up into objects.
+// Blocks are assigned to Slabs as they need the memory.
+//
+// Allocation from a block uses a free bitset, rather than a free list, which
+// will hopefully show better cache coherency.
+//
+// Blocks need to different offsets for the first object to avoid cache
+// collisions.
+
+
+#if 0
+
+#define BLOCK_SIZE (16 * 1024)
+
+typedef struct {
+	struct list_head list;
+	ObjectType type;
+	uint32_t first_obj;
+	uint32_t alloc_bits[];
+} Block;
+
+typedef struct {
+	struct list_head blocks;
+	ObjectType type;
+} Slab;
+
+static struct list_head *unused_blocks;
+
+#endif
+
+// FIXME: this is going since type and size will be in the block
+typedef struct {
+       ObjectType type;
+       unsigned size;          /* in bytes, we always round to a 4 byte boundary */
+} Header;
 
 static MemoryStats memory_stats_;
 
 void mm_init()
 {
-	GC_INIT();
+	// Grab a big chunk of memory, Block aligned.
 }
 
 void mm_exit()
 {
 	printf("\n\ntotal allocated: %llu\n",
 	       (unsigned long long) get_memory_stats()->total_allocated);
-	printf("heap size: %llu\n",
-	       (unsigned long long) GC_get_heap_size());
 }
 
 static void out_of_memory(void)
@@ -35,44 +83,33 @@ static void out_of_memory(void)
 	error("out of memory");
 }
 
-void *untyped_zalloc(size_t s)
+static void *untyped_alloc_(size_t s)
 {
-	return GC_MALLOC(s);
+	memory_stats_.total_allocated += s;
+	return malloc(s);
 }
 
-void *untyped_alloc(size_t s)
-{
-	return GC_MALLOC(s);
-}
-
-void *untyped_clone(void *ptr, size_t s)
-{
-	void *new = GC_MALLOC(s);
-	memcpy(new, ptr, s);
-	return new;
-}
-
-void *alloc(ObjectType type, size_t s)
+void *mm_alloc(ObjectType type, size_t s)
 {
 	size_t len = s + sizeof(Header);
 
 	// Also zeroes memory
-	Header *h = GC_MALLOC(len);
+	Header *h = untyped_alloc_(len);
 
 	if (!h)
 		out_of_memory();
 
 	h->type = type;
 	h->size = s;
-	h->magic = HEADER_MAGIC;
 
-	memory_stats_.total_allocated += len;
 	return h + 1;
 }
 
-void *zalloc(ObjectType type, size_t s)
+void *mm_zalloc(ObjectType type, size_t s)
 {
-	return alloc(type, s);
+	void *ptr = mm_alloc(type, s);
+	memset(ptr, 0, s);
+	return ptr;
 }
 
 static Header *obj_to_header(void *obj)
@@ -80,23 +117,10 @@ static Header *obj_to_header(void *obj)
 	return ((Header *) obj) - 1;
 }
 
-static void *follow_fwd_ptrs(void *obj)
+void *mm_clone(void *obj)
 {
 	Header *h = obj_to_header(obj);
-
-	while (h->type == FORWARD) {
-		obj = *((void **) (h + 1));
-		h = obj_to_header(obj);
-	}
-
-	return obj;
-}
-
-void *clone(void *obj_)
-{
-	void *obj = follow_fwd_ptrs(obj_);
-	Header *h = obj_to_header(obj);
-	void *new = alloc(h->type, h->size);
+	void *new = mm_alloc(h->type, h->size);
 
 	memcpy(new, obj, h->size);
 	return new;
@@ -106,36 +130,13 @@ void *as_ref(Value v)
 {
 	if (get_tag(v) != TAG_REF)
 		error("type error: value is not a reference.");
-	return follow_fwd_ptrs(v.ptr);
-}
-
-void replace_obj(void *old_obj, void *new_obj)
-{
-	set_obj_type(old_obj, FORWARD);
-	*((void **) old_obj) = new_obj;
-}
-
-void set_obj_type(void *obj, ObjectType t)
-{
-	obj_to_header(obj)->type = t;
+	return v.ptr;
 }
 
 ObjectType get_obj_type(void *obj)
 {
 	return obj_to_header(obj)->type;
 }
-
-//----------------------------------------------------------------
-
-Header *get_header(Value v)
-{
-	Header *h = obj_to_header(as_ref(v));
-	if (h->magic != HEADER_MAGIC) {
-		fprintf(stderr, "memory corruption detected.");
-		abort();
-	}
-	return h;
-};
 
 ObjectType get_type(Value v)
 {
@@ -181,7 +182,7 @@ Value mk_ref(void *ptr)
 
 Value clone_value(Value v)
 {
-	return mk_ref(clone(as_ref(v)));
+	return mk_ref(mm_clone(as_ref(v)));
 }
 
 Value mk_nil()
@@ -191,16 +192,6 @@ Value mk_nil()
 	return v;
 }
 
-// FIXME: move else where, and factor out common code with mk-symbol
-Value mk_true(void)
-{
-	String str, *copy;
-	string_tmp(":true", &str);
-	copy = string_clone(&str);
-	set_obj_type(copy, SYMBOL);
-	return mk_ref(copy);
-}
-
 bool is_false(Value v)
 {
 	return v.i == NIL;
@@ -208,6 +199,7 @@ bool is_false(Value v)
 
 static const char *type_desc(ObjectType t)
 {
+	// FIXME: out of date
 	static const char *strs[] = {
 		"forward",
 		"primitive",

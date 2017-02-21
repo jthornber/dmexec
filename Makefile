@@ -20,6 +20,7 @@ INCLUDES=\
 	-I.
 
 LIBS=\
+	-lgc \
 	-lreadline
 
 SOURCE=\

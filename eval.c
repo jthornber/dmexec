@@ -12,9 +12,9 @@
 
 static Thunk *t_new(size_t size)
 {
-	Thunk *r = untyped_zalloc(sizeof(*r));
+	Thunk *r = mm_zalloc(THUNK, sizeof(*r));
 
-	r->b = untyped_alloc(size);
+	r->b = mm_alloc(RAW, size);
 	r->e = r->b;
 	r->alloc_e = r->b + size;
 	return r;
@@ -95,7 +95,7 @@ static void *peek_p(Stack *s)
 
 static Frame *f_new(unsigned count)
 {
-	Frame *f = untyped_alloc(sizeof(*f) + count * sizeof(Value));
+	Frame *f = mm_alloc(FRAME, sizeof(*f) + count * sizeof(Value));
 	f->next = NULL;
 	return f;
 }
@@ -262,7 +262,7 @@ static inline bool step(VM *vm)
 	case CREATE_CLOSURE:
 		i = shift8(vm->code);
 		j = shift16(vm->code);
-		c = alloc(CLOSURE, sizeof(*c));
+		c = mm_alloc(CLOSURE, sizeof(*c));
 		c->code.b = vm->code->b + i;
 		c->code.e = vm->code->b + j;
 		c->env = vm->env;

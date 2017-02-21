@@ -17,7 +17,7 @@ void string_tmp(const char *cstr, String *str)
 String *string_clone(String *str)
 {
 	size_t len = str->e - str->b;
-	String *copy = alloc(STRING, sizeof(*copy) + len);
+	String *copy = mm_alloc(STRING, sizeof(*copy) + len);
 	copy->b = (const char *) (copy + 1);
 	copy->e = copy->b + len;
 	memcpy((char *) copy->b, str->b, len);
