@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <sys/mman.h>
 
 #define HEADER_MAGIC 846219U
 
@@ -38,6 +39,55 @@
 // Blocks need to different offsets for the first object to avoid cache
 // collisions.
 
+static void fail_(const char *msg)
+{
+	fprintf(stderr, "%s", msg);
+	exit(1);
+}
+
+typedef struct {
+	void *mem_begin, *mem_end;
+	struct list_head free;
+} ChunkAllocator;
+
+static void ca_init_(ChunkAllocator *ca, size_t chunk_size, size_t mem_size)
+{
+	void *ptr;
+
+	// Adjust mem_size to be a multiple of the chunk size
+	mem_size = chunk_size * (mem_size / chunk_size);
+
+	ca->mem_begin = mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
+			     MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+	if (ca->mem_begin == MAP_FAILED)
+		fail_("mmap failed, can't do anything without memory");
+	ca->mem_end = ca->mem_begin + mem_size;
+
+	INIT_LIST_HEAD(&ca->free);
+	for (ptr = ca->mem_begin; ptr != ca->mem_end; ptr++) {
+		struct list_head *tmp = ptr;
+		list_add(tmp, &ca->free);
+	}
+}
+
+static void *ca_alloc_(ChunkAllocator *ca)
+{
+	void *ptr;
+
+	if (list_empty(&ca->free))
+		fail_("out of memory");
+
+	ptr = ca->free.next;
+	list_del(ptr);
+
+	return ptr;
+}
+
+static void ca_free_(ChunkAllocator *ca, void *ptr)
+{
+	struct list_head *tmp = ptr;
+	list_add(tmp, &ca->free);
+}
 
 #if 0
 
