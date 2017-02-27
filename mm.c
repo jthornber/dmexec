@@ -272,48 +272,53 @@ typedef struct {
        unsigned size;          /* in bytes, we always round to a 4 byte boundary */
 } Header;
 
-static Slab vector_slab_;
-static Slab vblock_slab_;
+#define DECL_SLAB(code, type, size) \
+	static Slab type ## _slab_
+#include "slab_details.h"
+#undef DECL_SLAB
+
 static MemoryStats memory_stats_;
 
+#define DECL_SLAB(code, type, size) \
+	slab_init_(&type ## _slab_, #type, code, size)
 void mm_init(size_t mem_size)
 {
 	ca_init_(&global_allocator_, CHUNK_SIZE, mem_size);
-
-	// FIXME: where are we going to get the object sizes from?
-	slab_init_(&vector_slab_, "vector", VECTOR, sizeof(Vector));
-	slab_init_(&vblock_slab_, "vblock", VBLOCK, sizeof(Value) * 16);
+	#include "slab_details.h"
 }
+#undef DECL_SLAB
 
+#define DECL_SLAB(code, type, size) \
+	slab_exit_(&type ## _slab_);
 void mm_exit()
 {
-	slab_exit_(&vector_slab_);
-	slab_exit_(&vblock_slab_);
+	#include "slab_details.h"
 	ca_exit_(&global_allocator_);
 	printf("\n\ntotal allocated: %llu\n",
 	       (unsigned long long) get_memory_stats()->total_allocated);
 }
+#undef DECL_SLAB
 
 static void out_of_memory(void)
 {
 	error("out of memory");
 }
 
+#define DECL_SLAB(code, type, size) \
+	case code: \
+		return slab_alloc_(&type ## _slab_, s)
 void *mm_alloc(ObjectType type, size_t s)
 {
+	size_t len;
+	Header *h;
+
 	memory_stats_.total_allocated += s;
-	if (type == VBLOCK)
-		return slab_alloc_(&vblock_slab_, s);
+	switch (type) {
+		#include "slab_details.h"
 
-	else if (type == VECTOR)
-		return slab_alloc_(&vector_slab_, s);
-
-	else {
-		size_t len = s + sizeof(Header);
-
-		// Also zeroes memory
-		Header *h = malloc(len);
-
+	default:
+		len = s + sizeof(Header);
+		h = malloc(len);
 		if (!h)
 			out_of_memory();
 
@@ -323,6 +328,7 @@ void *mm_alloc(ObjectType type, size_t s)
 		return h + 1;
 	}
 }
+#undef DECL_SLAB
 
 void *mm_zalloc(ObjectType type, size_t s)
 {
