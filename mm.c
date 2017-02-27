@@ -12,6 +12,7 @@
 
 #include "error.h"
 #include "list.h"
+#include "types.h"
 #include "string_type.h"
 
 //----------------------------------------------------------------
@@ -140,12 +141,16 @@ typedef struct {
 } ChunkAddress;
 
 struct slab__ {
+	const char *name;
 	struct list_head full_chunks;
 	Chunk *current;
 	ObjectType type;
 	size_t obj_size;
 	size_t bitset_size; // in bytes
 	unsigned objs_per_chunk;
+
+	unsigned nr_chunks;
+	unsigned nr_allocs;
 };
 
 static unsigned calc_bitset_words_(unsigned nr_bits)
@@ -205,16 +210,20 @@ static void new_chunk_(Slab *s)
 	s->current->objects = ((void *) (s->current + 1)) + s->bitset_size;
 	s->current->last_alloc = 0;
 	clear_marks_(s->current);
+	s->nr_chunks++;
 }
 
-static void slab_init_(Slab *s, ObjectType type, unsigned obj_size)
+static void slab_init_(Slab *s, const char *name, ObjectType type, unsigned obj_size)
 {
+	s->name = name;
 	INIT_LIST_HEAD(&s->full_chunks);
 	s->current = NULL;
 	s->type = type;
 	s->obj_size = obj_size;
 	s->objs_per_chunk = calc_nr_objects_(obj_size);
 	s->bitset_size = calc_bitset_words_(s->objs_per_chunk) * sizeof(uint32_t);
+	s->nr_chunks = 0;
+	s->nr_allocs = 0;
 
 	new_chunk_(s);
 }
@@ -222,6 +231,8 @@ static void slab_init_(Slab *s, ObjectType type, unsigned obj_size)
 static void slab_exit_(Slab *s)
 {
 	struct list_head *entry, *tmp;
+	fprintf(stderr, "%s: chunks allocated = %u, nr allocated = %u\n",
+		s->name, s->nr_chunks, s->nr_allocs);
 	list_for_each_safe (entry, tmp, &s->full_chunks)
 		ca_free_(&global_allocator_, entry);
 	ca_free_(&global_allocator_, s->current);
@@ -236,7 +247,6 @@ static void *slab_alloc_(Slab *s, size_t len)
 
 	assert(len == s->obj_size);
 
-	// FIXME: clearly slow
 	for (addr.index = addr.c->last_alloc; addr.index < addr.c->owner->objs_per_chunk; addr.index++) {
 		if (!marked_(addr)) {
 			mark_(addr);
@@ -250,6 +260,7 @@ static void *slab_alloc_(Slab *s, size_t len)
 		new_chunk_(s);
 
 	assert(ca_within_heap_(&global_allocator_, r));
+	s->nr_allocs++;
 	return r;
 }
 
@@ -261,6 +272,7 @@ typedef struct {
        unsigned size;          /* in bytes, we always round to a 4 byte boundary */
 } Header;
 
+static Slab vector_slab_;
 static Slab vblock_slab_;
 static MemoryStats memory_stats_;
 
@@ -269,11 +281,13 @@ void mm_init(size_t mem_size)
 	ca_init_(&global_allocator_, CHUNK_SIZE, mem_size);
 
 	// FIXME: where are we going to get the object sizes from?
-	slab_init_(&vblock_slab_, VBLOCK, sizeof(Value) * 16);
+	slab_init_(&vector_slab_, "vector", VECTOR, sizeof(Vector));
+	slab_init_(&vblock_slab_, "vblock", VBLOCK, sizeof(Value) * 16);
 }
 
 void mm_exit()
 {
+	slab_exit_(&vector_slab_);
 	slab_exit_(&vblock_slab_);
 	ca_exit_(&global_allocator_);
 	printf("\n\ntotal allocated: %llu\n",
@@ -290,6 +304,9 @@ void *mm_alloc(ObjectType type, size_t s)
 	memory_stats_.total_allocated += s;
 	if (type == VBLOCK)
 		return slab_alloc_(&vblock_slab_, s);
+
+	else if (type == VECTOR)
+		return slab_alloc_(&vector_slab_, s);
 
 	else {
 		size_t len = s + sizeof(Header);

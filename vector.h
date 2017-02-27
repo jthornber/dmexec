@@ -2,11 +2,9 @@
 #define DMEXEC_VECTOR_H
 
 #include "mm.h"
+#include "types.h"
 
 //----------------------------------------------------------------
-
-struct __vector;
-typedef struct __vector Vector;
 
 Vector *v_empty();
 

@@ -20,18 +20,6 @@ static unsigned div_up_pow(unsigned n, unsigned d)
 #define RADIX_MASK ((1u << RADIX_SHIFT) - 1u)
 #define ENTRIES_PER_BLOCK (1u << RADIX_SHIFT)
 
-typedef Value *VBlock;
-
-struct __vector {
-	unsigned size;
-	unsigned cursor_index;
-
-	VBlock root;
-	VBlock cursor;
-	bool cursor_dirty:1;
-	bool transient:1;
-};
-
 Vector *v_empty()
 {
 	static Vector *empty = NULL;
