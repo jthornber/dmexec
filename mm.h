@@ -32,7 +32,7 @@ typedef union value {
 } Value;
 
 // Call these two from your main to set up the garbage collection.
-void mm_init();
+void mm_init(size_t mem_size);
 void mm_exit();
 
 void mm_add_root(Value *v);

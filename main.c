@@ -174,7 +174,7 @@ int main(int argc, char **argv)
 {
 	VM vm;
 
-	mm_init();
+	mm_init(64 * 1024 * 1024);
 //	init_vm(&vm);
 //	def_basic_primitives(&vm);
 //	def_dm_primitives(&vm);

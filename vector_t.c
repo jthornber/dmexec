@@ -126,12 +126,12 @@ static void run(const char *name, void (*fn)())
 
 int main(int argc, const char *argv[])
 {
-	mm_init();
+	mm_init(256 * 1024 * 1024);
 	run("empty_vector", t_empty_vector);
 	run("append_once", t_append_once);
 	run("append32", t_append32);
 	run("square", t_square);
-	run("append_million", t_append_million);
+	//run("append_million", t_append_million);
 	run("append_million_transient", t_append_million_transient);
 	mm_exit();
 
