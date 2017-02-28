@@ -1,12 +1,9 @@
 #ifndef DMEXEC_STRING_H
 #define DMEXEC_STRING_H
 
-//----------------------------------------------------------------
+#include "types.h"
 
-typedef struct {
-	const char *b;
-	const char *e;
-} String;
+//----------------------------------------------------------------
 
 void string_tmp(const char *cstr, String *str);
 

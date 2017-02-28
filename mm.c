@@ -266,38 +266,136 @@ static void *slab_alloc_(Slab *s, size_t len)
 
 //----------------------------------------------------------------
 
-// FIXME: this is going since type and size will be in the block
+// We use this data structure to manage the order that we walk data for the
+// mark phase.  If we use a stack, then we'll traverse in depth first order,
+// and a queue will be breadth first.  Since we're not copying (yet) the
+// traversal order doesn't really have any effect on future data locality.  So
+// our primary concern is cache locality of the mark bits.  Using a stack for
+// now.  We can't use standard data structures like Vector because this is used
+// whilst we're running a garbage collection.
+typedef struct {
+	struct list_head list;
+	Value *b, *e;
+} ValueChunk;
+
+typedef struct {
+	struct list_head chunks;
+} Traversal;
+
+static void trav_init_(Traversal *tv)
+{
+	
+}
+
+static bool trav_empty_(Traversal *tv)
+{
+	// FIXME: finish
+	return true;
+}
+
+static void trav_push_(Traversal *tv, Value v)
+{
+
+}
+
+static Value trav_pop_(Traversal *tv)
+{
+	// FIXME: finish
+	return mk_nil();
+}
+
+static void mark_value_(Value v)
+{
+	// FIXME: finish
+}
+
+static void mark_one_(Traversal *tv, Value v)
+{
+	switch (get_type(v)) {
+	case PRIMITIVE:
+	case CLOSURE:
+	case STRING:
+	case SYMBOL:
+		break;
+
+	case CONS: {
+		Cons *cell = v.ptr;
+		trav_push_(tv, cell->car);
+		trav_push_(tv, cell->cdr);
+		mark_value_(v);
+		break;
+	}
+
+	case NIL:
+		break;
+
+	case VECTOR: {
+		Vector *vec = v.ptr;
+		trav_push_(tv, mk_ref(vec->root));
+		trav_push_(tv, mk_ref(vec->cursor));
+		mark_value_(v);
+		break;
+	}
+
+	case VBLOCK: {
+		unsigned i;
+		VBlock vb = v.ptr;
+		for (i = 0; i < ENTRIES_PER_VBLOCK; i++)
+			trav_push_(tv, vb[i]);
+		mark_value_(v);
+		break;
+	}
+
+	case FRAME:
+	case STATIC_FRAME:
+	case STATIC_ENV:
+	case THUNK:
+	case RAW:
+	case FIXNUM:
+	     break;
+	}
+}
+
+static void mark_all_(Traversal *tv)
+{
+	while (!trav_empty_(tv))
+		mark_one_(tv, trav_pop_(tv));
+}
+
+//----------------------------------------------------------------
+
+// FIXME: this is going since type and size will be in the slab
 typedef struct {
        ObjectType type;
        unsigned size;          /* in bytes, we always round to a 4 byte boundary */
 } Header;
+
+static MemoryStats memory_stats_;
 
 #define DECL_SLAB(code, type, size) \
 	static Slab type ## _slab_
 #include "slab_details.h"
 #undef DECL_SLAB
 
-static MemoryStats memory_stats_;
-
-#define DECL_SLAB(code, type, size) \
-	slab_init_(&type ## _slab_, #type, code, size)
 void mm_init(size_t mem_size)
 {
 	ca_init_(&global_allocator_, CHUNK_SIZE, mem_size);
-	#include "slab_details.h"
-}
-#undef DECL_SLAB
-
 #define DECL_SLAB(code, type, size) \
-	slab_exit_(&type ## _slab_);
+	slab_init_(&type ## _slab_, #type, code, size)
+	#include "slab_details.h"
+#undef DECL_SLAB
+}
+
 void mm_exit()
 {
+#define DECL_SLAB(code, type, size) \
+	slab_exit_(&type ## _slab_);
 	#include "slab_details.h"
+#undef DECL_SLAB
 	ca_exit_(&global_allocator_);
 	printf("\n\ntotal allocated: %llu\n",
 	       (unsigned long long) get_memory_stats()->total_allocated);
 }
-#undef DECL_SLAB
 
 static void out_of_memory(void)
 {
@@ -317,6 +415,7 @@ void *mm_alloc(ObjectType type, size_t s)
 		#include "slab_details.h"
 
 	default:
+		// FIXME: kill this
 		len = s + sizeof(Header);
 		h = malloc(len);
 		if (!h)

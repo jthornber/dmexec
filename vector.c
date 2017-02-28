@@ -16,10 +16,6 @@ static unsigned div_up_pow(unsigned n, unsigned d)
 
 //----------------------------------------------------------------
 
-#define RADIX_SHIFT 4u
-#define RADIX_MASK ((1u << RADIX_SHIFT) - 1u)
-#define ENTRIES_PER_BLOCK (1u << RADIX_SHIFT)
-
 Vector *v_empty()
 {
 	static Vector *empty = NULL;
@@ -40,7 +36,7 @@ unsigned v_size(Vector *v)
 	return v->size;
 }
 
-#define VBLOCK_SIZE (sizeof(Value) * ENTRIES_PER_BLOCK)
+#define VBLOCK_SIZE (sizeof(Value) * ENTRIES_PER_VBLOCK)
 
 static VBlock vb_alloc()
 {
@@ -167,7 +163,7 @@ static VBlock trim_(VBlock vb, unsigned size, unsigned level)
 {
 	vb = vb_clone(vb);
 	unsigned i, te = tail_entries(size, level);
-	for (i = te; i < ENTRIES_PER_BLOCK; i++)
+	for (i = te; i < ENTRIES_PER_VBLOCK; i++)
 		vb[i] = mk_nil();
 
 	if (level && (size = size % full_tree(level - 1)))
@@ -204,7 +200,7 @@ static VBlock alloc_tree_(unsigned level, Value init)
 	else
 		v = init;
 
-	for (i = 0; i < ENTRIES_PER_BLOCK; i++)
+	for (i = 0; i < ENTRIES_PER_VBLOCK; i++)
 		vb[i] = v;
 
 	return vb;
@@ -217,8 +213,8 @@ static VBlock merge_bottom_levels_(VBlock lhs, unsigned lhs_size,
 	VBlock vb = vb_clone(lhs);
 	unsigned te = tail_entries(lhs_size, levels);
 
-	if (te != ENTRIES_PER_BLOCK)
-		memcpy(vb + te, rhs + te, sizeof(Value) * (ENTRIES_PER_BLOCK - te));
+	if (te != ENTRIES_PER_VBLOCK)
+		memcpy(vb + te, rhs + te, sizeof(Value) * (ENTRIES_PER_VBLOCK - te));
 
 	// deliberate assignment in conditional
 	if (levels && (lhs_size = lhs_size % full_tree(levels - 1))) {

@@ -4,13 +4,9 @@
 #include <stdbool.h>
 
 #include "mm.h"
+#include "types.h"
 
 /*----------------------------------------------------------------*/
-
-typedef struct {
-  Value car;
-  Value cdr;
-} Cons;
 
 Value car(Value cell);
 Value cadr(Value cell);
