@@ -273,36 +273,74 @@ static void *slab_alloc_(Slab *s, size_t len)
 // our primary concern is cache locality of the mark bits.  Using a stack for
 // now.  We can't use standard data structures like Vector because this is used
 // whilst we're running a garbage collection.
+
 typedef struct {
 	struct list_head list;
-	Value *b, *e;
+	Value *b, *e, *current;
 } ValueChunk;
 
 typedef struct {
 	struct list_head chunks;
 } Traversal;
 
+static void new_vc_(Traversal *tv)
+{
+	ValueChunk *vc = ca_alloc_(&global_allocator_);
+	list_add(&vc->list, &tv->chunks);
+	vc->b = (Value *) (vc + 1);
+	vc->e = vc->b + ((CHUNK_SIZE - sizeof(ValueChunk)) / sizeof(Value));
+	vc->current = vc->b;
+}
+
 static void trav_init_(Traversal *tv)
 {
-	
+	INIT_LIST_HEAD(&tv->chunks);
 }
 
 static bool trav_empty_(Traversal *tv)
 {
-	// FIXME: finish
-	return true;
+	return list_empty(&tv->chunks);
+}
+
+static ValueChunk *trav_current_chunk(Traversal *tv)
+{
+	return (ValueChunk *) tv->chunks.next;
 }
 
 static void trav_push_(Traversal *tv, Value v)
 {
+	ValueChunk *vc;
 
+	if (trav_empty_(tv))
+		new_vc_(tv);
+
+	vc = trav_current_chunk(tv);
+	if (vc->current == vc->e) {
+		new_vc_(tv);
+		vc = trav_current_chunk(tv);
+	}
+
+	*vc->current++ = v;
 }
 
 static Value trav_pop_(Traversal *tv)
 {
-	// FIXME: finish
-	return mk_nil();
+	ValueChunk *vc;
+
+	if (trav_empty_(tv))
+		fail_("empty traversal");
+
+	vc = trav_current_chunk(tv);
+	if (vc->current == vc->e) {
+		list_del(&vc->list);
+		ca_free_(&global_allocator_, vc);
+		return trav_pop_(tv);
+	}
+
+	return *vc->current--;
 }
+
+//----------------------------------------------------------------
 
 static void mark_value_(Value v)
 {

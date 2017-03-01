@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+#include "types.h"
+
 //----------------------------------------------------------------
 
 // Update type_desc() if you change this.
@@ -25,11 +27,6 @@ typedef enum {
 	// FIXME we need 64 bit integers for device sizes
 	FIXNUM,
 } ObjectType;
-
-typedef union value {
-	void *ptr;
-	int32_t i;
-} Value;
 
 // Call these two from your main to set up the garbage collection.
 void mm_init(size_t mem_size);

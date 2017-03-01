@@ -2,10 +2,16 @@
 #define DMEXEC_TYPES_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "list.h"
 
 //----------------------------------------------------------------
+
+typedef union value {
+	void *ptr;
+	int32_t i;
+} Value;
 
 typedef struct {
 	struct list_head list;
