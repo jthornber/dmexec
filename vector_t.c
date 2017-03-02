@@ -54,6 +54,11 @@ static void t_append_million()
 	for (i = 0; i < count; i++) {
 		v = v_append(v, mk_fixnum(i));
 		assert(equalp(v_ref(v, i), mk_fixnum(i)));
+
+		if (!(i % (32 * 1024))) {
+			Value val = mk_ref(v);
+			mm_garbage_collect(&val, 1);
+		}
 	}
 
 	for (i = 0; i < count; i++)
@@ -71,6 +76,11 @@ static void t_append_million_transient()
 	for (i = 0; i < count; i++) {
 		v_set(v, i, mk_fixnum(i));
 		assert(equalp(v_ref(v, i), mk_fixnum(i)));
+
+		if (!(i % (32 * 1024))) {
+			Value val = mk_ref(v);
+			mm_garbage_collect(&val, 1);
+		}
 	}
 	v_transient_end(v);
 
@@ -131,7 +141,7 @@ int main(int argc, const char *argv[])
 	run("append_once", t_append_once);
 	run("append32", t_append32);
 	run("square", t_square);
-	//run("append_million", t_append_million);
+	run("append_million", t_append_million);
 	run("append_million_transient", t_append_million_transient);
 	mm_exit();
 

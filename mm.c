@@ -131,7 +131,7 @@ typedef struct {
 	struct list_head list;
 	Slab *owner;
 	void *objects;
-	uint32_t last_alloc;
+	uint32_t search_start;
 	uint32_t marks[0];
 } Chunk;
 
@@ -143,7 +143,8 @@ typedef struct {
 struct slab__ {
 	const char *name;
 	struct list_head full_chunks;
-	Chunk *current;
+	struct list_head chunks;
+
 	ObjectType type;
 	size_t obj_size;
 	size_t bitset_size; // in bytes
@@ -169,6 +170,7 @@ static uint32_t calc_nr_objects_(size_t obj_size)
 static void clear_marks_(Chunk *c)
 {
 	memset(c->marks, 0, c->owner->bitset_size);
+	c->search_start = 0;
 }
 
 static ChunkAddress obj_address(void *obj)
@@ -202,66 +204,76 @@ static bool marked_(ChunkAddress addr)
 
 static void new_chunk_(Slab *s)
 {
-	if (s->current)
-		list_add(&s->current->list, &s->full_chunks);
+	Chunk *c = ca_alloc_(&global_allocator_);
 
-	s->current = ca_alloc_(&global_allocator_);
-	s->current->owner = s;
-	s->current->objects = ((void *) (s->current + 1)) + s->bitset_size;
-	s->current->last_alloc = 0;
-	clear_marks_(s->current);
+	c->owner = s;
+	c->objects = ((void *) (c + 1)) + s->bitset_size;
+	clear_marks_(c);
 	s->nr_chunks++;
+	list_add(&c->list, &s->chunks);
+}
+
+static void free_chunk_(Slab *s, Chunk *c)
+{
+	s->nr_chunks--;
+	list_del(&c->list);
+	ca_free_(&global_allocator_, c);
 }
 
 static void slab_init_(Slab *s, const char *name, ObjectType type, unsigned obj_size)
 {
 	s->name = name;
 	INIT_LIST_HEAD(&s->full_chunks);
-	s->current = NULL;
+	INIT_LIST_HEAD(&s->chunks);
 	s->type = type;
 	s->obj_size = obj_size;
 	s->objs_per_chunk = calc_nr_objects_(obj_size);
 	s->bitset_size = calc_bitset_words_(s->objs_per_chunk) * sizeof(uint32_t);
 	s->nr_chunks = 0;
 	s->nr_allocs = 0;
-
-	new_chunk_(s);
 }
 
 static void slab_exit_(Slab *s)
 {
 	struct list_head *entry, *tmp;
-	fprintf(stderr, "%s: chunks allocated = %u, nr allocated = %u\n",
-		s->name, s->nr_chunks, s->nr_allocs);
-	list_for_each_safe (entry, tmp, &s->full_chunks)
+	fprintf(stderr, "%s: chunks allocated = %u (%um), nr allocated = %u\n",
+		s->name, s->nr_chunks, (s->nr_chunks * CHUNK_SIZE) / (1024 * 1024),
+		s->nr_allocs);
+	list_splice_init(&s->full_chunks, &s->chunks);
+	list_for_each_safe (entry, tmp, &s->chunks)
 		ca_free_(&global_allocator_, entry);
-	ca_free_(&global_allocator_, s->current);
 }
 
 static void *slab_alloc_(Slab *s, size_t len)
 {
-	void *r;
 	ChunkAddress addr;
 
-	addr.c = s->current;
+	if (list_empty(&s->chunks))
+		new_chunk_(s);
 
+	addr.c = (Chunk *) s->chunks.next;
 	assert(len == s->obj_size);
 
-	for (addr.index = addr.c->last_alloc; addr.index < addr.c->owner->objs_per_chunk; addr.index++) {
+	for (addr.index = addr.c->search_start; addr.index < s->objs_per_chunk; addr.index++) {
 		if (!marked_(addr)) {
 			mark_(addr);
-			r = addr.c->objects + (addr.index * addr.c->owner->obj_size);
-			addr.c->last_alloc = addr.index;
-			break;
+			addr.c->search_start = addr.index + 1;
+			s->nr_allocs++;
+			return addr.c->objects + (addr.index * s->obj_size);
 		}
 	}
 
-	if (addr.index == (addr.c->owner->objs_per_chunk - 1))
-		new_chunk_(s);
+	list_move(&addr.c->list, &s->full_chunks);
+	return slab_alloc_(s, len);
+}
 
-	assert(ca_within_heap_(&global_allocator_, r));
-	s->nr_allocs++;
-	return r;
+static void slab_clear_marks_(Slab *s)
+{
+	Chunk *c;
+
+	list_splice_init(&s->full_chunks, &s->chunks);
+	list_for_each_entry (c, &s->chunks, list)
+		clear_marks_(c);
 }
 
 //----------------------------------------------------------------
@@ -320,34 +332,56 @@ static void trav_push_(Traversal *tv, Value v)
 		vc = trav_current_chunk(tv);
 	}
 
-	*vc->current++ = v;
+	*vc->current = v;
+	vc->current++;
 }
 
 static Value trav_pop_(Traversal *tv)
 {
+	Value v;
 	ValueChunk *vc;
 
 	if (trav_empty_(tv))
 		fail_("empty traversal");
 
 	vc = trav_current_chunk(tv);
-	if (vc->current == vc->e) {
+	vc->current--;
+	v = *vc->current;
+
+	if (vc->current == vc->b) {
 		list_del(&vc->list);
 		ca_free_(&global_allocator_, vc);
-		return trav_pop_(tv);
 	}
 
-	return *vc->current--;
+	return v;
 }
 
 //----------------------------------------------------------------
 
-static void mark_value_(Value v)
+static bool is_immediate_(Value v)
 {
-	// FIXME: finish
+	return get_tag(v) != TAG_REF;
 }
 
-static void mark_one_(Traversal *tv, Value v)
+static void mark_value_(Traversal *tv, Value v)
+{
+	if (is_immediate_(v))
+		return;
+
+	else if (!ca_within_heap_(&global_allocator_, v.ptr))
+		return;
+
+	else {
+		ChunkAddress addr = obj_address(v.ptr);
+		if (!marked_(addr)) {
+			mark_(addr);
+			trav_push_(tv, v);
+			return;
+		}
+	}
+}
+
+static void walk_one_(Traversal *tv, Value v)
 {
 	switch (get_type(v)) {
 	case PRIMITIVE:
@@ -358,9 +392,8 @@ static void mark_one_(Traversal *tv, Value v)
 
 	case CONS: {
 		Cons *cell = v.ptr;
-		trav_push_(tv, cell->car);
-		trav_push_(tv, cell->cdr);
-		mark_value_(v);
+		mark_value_(tv, cell->car);
+		mark_value_(tv, cell->cdr);
 		break;
 	}
 
@@ -369,9 +402,8 @@ static void mark_one_(Traversal *tv, Value v)
 
 	case VECTOR: {
 		Vector *vec = v.ptr;
-		trav_push_(tv, mk_ref(vec->root));
-		trav_push_(tv, mk_ref(vec->cursor));
-		mark_value_(v);
+		mark_value_(tv, mk_ref(vec->root));
+		mark_value_(tv, mk_ref(vec->cursor));
 		break;
 	}
 
@@ -379,8 +411,7 @@ static void mark_one_(Traversal *tv, Value v)
 		unsigned i;
 		VBlock vb = v.ptr;
 		for (i = 0; i < ENTRIES_PER_VBLOCK; i++)
-			trav_push_(tv, vb[i]);
-		mark_value_(v);
+			mark_value_(tv, vb[i]);
 		break;
 	}
 
@@ -394,10 +425,10 @@ static void mark_one_(Traversal *tv, Value v)
 	}
 }
 
-static void mark_all_(Traversal *tv)
+static void walk_all_(Traversal *tv)
 {
 	while (!trav_empty_(tv))
-		mark_one_(tv, trav_pop_(tv));
+		walk_one_(tv, trav_pop_(tv));
 }
 
 //----------------------------------------------------------------
@@ -487,6 +518,22 @@ void *mm_clone(void *obj)
 	memcpy(new, obj, get_obj_size(obj));
 
 	return new;
+}
+
+void mm_garbage_collect(Value *roots, unsigned count)
+{
+	Traversal tv;
+
+#define DECL_SLAB(code, type, size) \
+	slab_clear_marks_(&type ## _slab_)
+#include <slab_details.h>
+#undef DECL_SLAB
+
+	trav_init_(&tv);
+	while (count--)
+		trav_push_(&tv, roots[count]);
+
+	walk_all_(&tv);
 }
 
 void *as_ref(Value v)

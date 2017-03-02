@@ -43,6 +43,8 @@ void *mm_alloc(ObjectType type, size_t s);
 void *mm_zalloc(ObjectType type, size_t s);
 void *mm_clone(void *obj);
 
+void mm_garbage_collect(Value *roots, unsigned count);
+
 //----------------------------------------------------------------
 
 ObjectType get_obj_type(void *obj);
