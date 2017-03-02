@@ -18,12 +18,18 @@ static unsigned div_up_pow(unsigned n, unsigned d)
 
 Vector *v_empty()
 {
+#if 0
+	// FIXME: this static needs to be added to the roots otherwise it'll
+	// get garbage collected.
 	static Vector *empty = NULL;
 
 	if (!empty)
 		empty = mm_zalloc(VECTOR, sizeof(Vector));
 
 	return empty;
+#else
+	return mm_zalloc(VECTOR, sizeof(Vector));
+#endif
 }
 
 static Vector *v_shadow(Vector *v)

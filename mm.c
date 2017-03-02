@@ -65,6 +65,7 @@ static void *mem_align(void *ptr, size_t align)
 //----------------------------------------------------------------
 
 typedef struct {
+	size_t chunk_size;
 	void *mem_begin, *mem_end;
 	struct list_head free;
 } ChunkAllocator;
@@ -76,6 +77,7 @@ static void ca_init_(ChunkAllocator *ca, size_t chunk_size, size_t mem_size)
 	// Adjust mem_size to be a multiple of the chunk size
 	mem_size = chunk_size * (mem_size / chunk_size);
 
+	ca->chunk_size = chunk_size;
 	ca->mem_begin = mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
 			     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (ca->mem_begin == MAP_FAILED)
@@ -103,12 +105,14 @@ static void *ca_alloc_(ChunkAllocator *ca)
 	ptr = ca->free.next;
 	list_del(ptr);
 
+	memset(ptr, 0xba, ca->chunk_size);
 	return ptr;
 }
 
 static void ca_free_(ChunkAllocator *ca, void *ptr)
 {
 	struct list_head *tmp = ptr;
+	memset(ptr, 0xde, ca->chunk_size);
 	list_add(tmp, &ca->free);
 }
 
@@ -132,6 +136,7 @@ typedef struct {
 	Slab *owner;
 	void *objects;
 	uint32_t search_start;
+	bool unused;
 	uint32_t marks[0];
 } Chunk;
 
@@ -171,6 +176,7 @@ static void clear_marks_(Chunk *c)
 {
 	memset(c->marks, 0, c->owner->bitset_size);
 	c->search_start = 0;
+	c->unused = true;
 }
 
 static ChunkAddress obj_address(void *obj)
@@ -195,6 +201,7 @@ static bool test_bit_(uint32_t *words, unsigned index)
 static void mark_(ChunkAddress addr)
 {
 	set_bit_(addr.c->marks, addr.index);
+	addr.c->unused = false;
 }
 
 static bool marked_(ChunkAddress addr)
@@ -211,13 +218,6 @@ static void new_chunk_(Slab *s)
 	clear_marks_(c);
 	s->nr_chunks++;
 	list_add(&c->list, &s->chunks);
-}
-
-static void free_chunk_(Slab *s, Chunk *c)
-{
-	s->nr_chunks--;
-	list_del(&c->list);
-	ca_free_(&global_allocator_, c);
 }
 
 static void slab_init_(Slab *s, const char *name, ObjectType type, unsigned obj_size)
@@ -274,6 +274,26 @@ static void slab_clear_marks_(Slab *s)
 	list_splice_init(&s->full_chunks, &s->chunks);
 	list_for_each_entry (c, &s->chunks, list)
 		clear_marks_(c);
+}
+
+static void slab_return_unused_chunks_(Slab *s)
+{
+	Chunk *c, *tmp;
+
+	list_for_each_entry_safe (c, tmp, &s->chunks, list)
+		if (c->unused) {
+			unsigned i;
+			ChunkAddress addr;
+
+			addr.c = c;
+			for (i = 0; i < s->objs_per_chunk; i++) {
+				addr.index = i;
+				assert(!marked_(addr));
+			}
+			s->nr_chunks--;
+			list_del(&c->list);
+			ca_free_(&global_allocator_, c);
+		}
 }
 
 //----------------------------------------------------------------
@@ -368,15 +388,19 @@ static void mark_value_(Traversal *tv, Value v)
 	if (is_immediate_(v))
 		return;
 
-	else if (!ca_within_heap_(&global_allocator_, v.ptr))
+	else if (!v.ptr) {
+		fprintf(stderr, "walked a null ptr\n");
 		return;
 
-	else {
+	} else if (!ca_within_heap_(&global_allocator_, v.ptr)) {
+		fprintf(stderr, "value not in heap\n");
+		return;
+
+	} else {
 		ChunkAddress addr = obj_address(v.ptr);
 		if (!marked_(addr)) {
 			mark_(addr);
 			trav_push_(tv, v);
-			return;
 		}
 	}
 }
@@ -531,9 +555,14 @@ void mm_garbage_collect(Value *roots, unsigned count)
 
 	trav_init_(&tv);
 	while (count--)
-		trav_push_(&tv, roots[count]);
+		mark_value_(&tv, roots[count]);
 
 	walk_all_(&tv);
+
+#define DECL_SLAB(code, type, size) \
+	slab_return_unused_chunks_(&type ## _slab_)
+#include <slab_details.h>
+#undef DECL_SLAB
 }
 
 void *as_ref(Value v)
