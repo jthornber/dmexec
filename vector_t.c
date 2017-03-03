@@ -136,7 +136,7 @@ static void run(const char *name, void (*fn)())
 
 int main(int argc, const char *argv[])
 {
-	mm_init(256 * 1024 * 1024);
+	mm_init(32 * 1024 * 1024);
 	run("empty_vector", t_empty_vector);
 	run("append_once", t_append_once);
 	run("append32", t_append32);
