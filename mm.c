@@ -68,6 +68,10 @@ typedef struct {
 	size_t chunk_size;
 	void *mem_begin, *mem_end;
 	struct list_head free;
+
+	// this is the total nr of times alloc has been called, frees are not
+	// taken into account.  Used to see if we need a GC.
+	unsigned nr_allocs;
 } ChunkAllocator;
 
 static void ca_init_(ChunkAllocator *ca, size_t chunk_size, size_t mem_size)
@@ -88,6 +92,8 @@ static void ca_init_(ChunkAllocator *ca, size_t chunk_size, size_t mem_size)
 	INIT_LIST_HEAD(&ca->free);
 	for (ptr = ca->mem_begin; (ptr + chunk_size) <= ca->mem_end; ptr += chunk_size)
 		list_add((struct list_head *) ptr, &ca->free);
+
+	ca->nr_allocs = 0;
 }
 
 static void ca_exit_(ChunkAllocator *ca)
@@ -102,6 +108,7 @@ static void *ca_alloc_(ChunkAllocator *ca)
 	if (list_empty(&ca->free))
 		fail_("out of memory");
 
+	ca->nr_allocs++;
 	ptr = ca->free.next;
 	list_del(ptr);
 
