@@ -254,14 +254,14 @@ static unsigned find_first_clear(uint32_t *words, unsigned b, unsigned e)
 	unsigned we = div_up(e, 32);
 	unsigned bit;
 
-	while ((wb != we) && (words[wb] == ~0))
+	while (wb != we) {
+		bit = __builtin_ffs(~words[wb]);
+		if (bit)
+			return (wb * 32) + bit - 1;
 		wb++;
+	}
 
-	if (wb == we)
-		return e;
-
-	bit = __builtin_ffs(~words[wb]) - 1;
-	return (wb * 32) + bit;
+	return e;
 }
 
 static void *slab_alloc_(Slab *s, size_t len)
