@@ -123,11 +123,6 @@ static void ca_free_(ChunkAllocator *ca, void *ptr)
 	list_add(tmp, &ca->free);
 }
 
-static bool ca_within_heap_(ChunkAllocator *ca, void *ptr)
-{
-	return (ptr >= ca->mem_begin) && (ptr < ca->mem_end);
-}
-
 static ChunkAllocator global_allocator_;
 
 //----------------------------------------------------------------
@@ -157,8 +152,8 @@ struct slab__ {
 	struct list_head full_chunks;
 	struct list_head chunks;
 
-	ObjectType type;
-	size_t obj_size;
+	uint16_t type;
+	uint16_t obj_size;
 	size_t bitset_size; // in bytes
 	unsigned objs_per_chunk;
 
@@ -186,6 +181,8 @@ static void clear_marks_(Chunk *c)
 	c->unused = true;
 }
 
+// This works for interior pointers too, so that we can cope with generic slabs
+// that have objects prepended with a header.
 static ChunkAddress obj_address(void *obj)
 {
 	intptr_t mask = ~(((intptr_t) CHUNK_SIZE) - 1);
@@ -227,7 +224,7 @@ static void new_chunk_(Slab *s)
 	list_add(&c->list, &s->chunks);
 }
 
-static void slab_init_(Slab *s, const char *name, ObjectType type, unsigned obj_size)
+static void slab_init_(Slab *s, const char *name, uint16_t type, unsigned obj_size)
 {
 	s->name = name;
 	INIT_LIST_HEAD(&s->full_chunks);
@@ -259,9 +256,12 @@ static void *slab_alloc_(Slab *s, size_t len)
 		new_chunk_(s);
 
 	addr.c = (Chunk *) s->chunks.next;
-	assert(len == s->obj_size);
+	assert(len <= s->obj_size);
 
-	for (addr.index = addr.c->search_start; addr.index < s->objs_per_chunk; addr.index++) {
+	// FIXME: this loop is using a lot of cpu.  We need to check multiple
+	// bits per iteration.
+	for (addr.index = addr.c->search_start; addr.index < s->objs_per_chunk;
+			addr.index++) {
 		if (!marked_(addr)) {
 			mark_(addr);
 			addr.c->search_start = addr.index + 1;
@@ -399,10 +399,6 @@ static void mark_value_(Traversal *tv, Value v)
 		fprintf(stderr, "walked a null ptr\n");
 		return;
 
-	} else if (!ca_within_heap_(&global_allocator_, v.ptr)) {
-		fprintf(stderr, "value not in heap\n");
-		return;
-
 	} else {
 		ChunkAddress addr = obj_address(v.ptr);
 		if (!marked_(addr)) {
@@ -464,70 +460,107 @@ static void walk_all_(Traversal *tv)
 
 //----------------------------------------------------------------
 
-// FIXME: this is going since type and size will be in the slab
 typedef struct {
-       ObjectType type;
-       unsigned size;          /* in bytes, we always round to a 4 byte boundary */
+       uint16_t type;
+       uint16_t size;
 } Header;
 
 static MemoryStats memory_stats_;
 
-#define DECL_SLAB(code, type, size) \
-	static Slab type ## _slab_
-#include "slab_details.h"
-#undef DECL_SLAB
+static Slab generic_8_slab_;
+static Slab generic_16_slab_;
+static Slab generic_32_slab_;
+static Slab generic_64_slab_;
+static Slab generic_128_slab_;
+
+static Slab cons_slab_;
+static Slab vblock_slab_;
+
+#define GENERIC_TYPE 0xff
 
 void mm_init(size_t mem_size)
 {
 	ca_init_(&global_allocator_, CHUNK_SIZE, mem_size);
-#define DECL_SLAB(code, type, size) \
-	slab_init_(&type ## _slab_, #type, code, size)
-	#include "slab_details.h"
-#undef DECL_SLAB
+
+	slab_init_(&generic_8_slab_, "generic-8", GENERIC_TYPE, 8);
+	slab_init_(&generic_16_slab_, "generic-16", GENERIC_TYPE, 16);
+	slab_init_(&generic_32_slab_, "generic-32", GENERIC_TYPE, 32);
+	slab_init_(&generic_64_slab_, "generic-64", GENERIC_TYPE, 64);
+	slab_init_(&generic_128_slab_, "generic-128", GENERIC_TYPE, 64);
+
+	slab_init_(&cons_slab_, "cons", CONS, sizeof(Cons));
+	slab_init_(&vblock_slab_, "vblock", VBLOCK, sizeof(Value) * ENTRIES_PER_VBLOCK);
 }
 
 void mm_exit()
 {
-#define DECL_SLAB(code, type, size) \
-	slab_exit_(&type ## _slab_);
-	#include "slab_details.h"
-#undef DECL_SLAB
+	slab_exit_(&generic_8_slab_);
+	slab_exit_(&generic_16_slab_);
+	slab_exit_(&generic_32_slab_);
+	slab_exit_(&generic_64_slab_);
+	slab_exit_(&generic_128_slab_);
+
+	slab_exit_(&cons_slab_);
+	slab_exit_(&vblock_slab_);
+
 	ca_exit_(&global_allocator_);
 	printf("\n\ntotal allocated: %llu\n",
 	       (unsigned long long) get_memory_stats()->total_allocated);
 }
 
-static void out_of_memory(void)
+static Slab *choose_slab_(size_t s)
 {
-	error("out of memory");
+	static Slab *slabs_[] = {
+		&generic_8_slab_,
+		&generic_16_slab_,
+		&generic_32_slab_,
+		&generic_64_slab_,
+		&generic_128_slab_,
+	};
+
+	unsigned i, n;
+
+	// FIXME: slow, use ffs
+	assert(s <= 128);
+	for (i = 0, n = 8; ; i++, n *= 2) {
+		if (s <= n)
+			return slabs_[i];
+	}
+
+	assert(false);
+	return NULL;
 }
 
-#define DECL_SLAB(code, type, size) \
-	case code: \
-		return slab_alloc_(&type ## _slab_, s)
-void *mm_alloc(ObjectType type, size_t s)
+static inline void *alloc_(ObjectType type, size_t s)
 {
-	size_t len;
 	Header *h;
+	size_t len;
 
-	memory_stats_.total_allocated += s;
 	switch (type) {
-		#include "slab_details.h"
+	case CONS:
+		return slab_alloc_(&cons_slab_, s);
+
+	case VBLOCK:
+		return slab_alloc_(&vblock_slab_, s);
 
 	default:
-		// FIXME: kill this
 		len = s + sizeof(Header);
-		h = malloc(len);
-		if (!h)
-			out_of_memory();
-
+		h = slab_alloc_(choose_slab_(len), len);
 		h->type = type;
 		h->size = s;
-
 		return h + 1;
 	}
 }
-#undef DECL_SLAB
+
+void *mm_alloc(ObjectType type, size_t s)
+{
+	void *ptr = alloc_(type, s);
+	if (!ptr)
+		error("out of memory");
+
+	memory_stats_.total_allocated += s;
+	return ptr;
+}
 
 void *mm_zalloc(ObjectType type, size_t s)
 {
@@ -543,22 +576,31 @@ static Header *obj_to_header(void *obj)
 
 void *mm_clone(void *obj)
 {
-	// FIXME: once everything is allocated from a slab get the slab rather
-	// than calling get_obj*
-	void *new = mm_alloc(get_obj_type(obj), get_obj_size(obj));
-	memcpy(new, obj, get_obj_size(obj));
+	Slab *slab = obj_address(obj).c->owner;
+	void *new = slab_alloc_(slab, slab->obj_size);
+	memory_stats_.total_allocated += slab->obj_size;
 
-	return new;
+	if (slab->type == GENERIC_TYPE) {
+		memcpy(new, obj_to_header(obj), slab->obj_size);
+		return ((Header *) new) + 1;
+	} else {
+		memcpy(new, obj, slab->obj_size);
+		return new;
+	}
 }
 
 void mm_garbage_collect(Value *roots, unsigned count)
 {
 	Traversal tv;
 
-#define DECL_SLAB(code, type, size) \
-	slab_clear_marks_(&type ## _slab_)
-#include <slab_details.h>
-#undef DECL_SLAB
+	slab_clear_marks_(&generic_8_slab_);
+	slab_clear_marks_(&generic_16_slab_);
+	slab_clear_marks_(&generic_32_slab_);
+	slab_clear_marks_(&generic_64_slab_);
+	slab_clear_marks_(&generic_128_slab_);
+
+	slab_clear_marks_(&cons_slab_);
+	slab_clear_marks_(&vblock_slab_);
 
 	trav_init_(&tv);
 	while (count--)
@@ -566,10 +608,14 @@ void mm_garbage_collect(Value *roots, unsigned count)
 
 	walk_all_(&tv);
 
-#define DECL_SLAB(code, type, size) \
-	slab_return_unused_chunks_(&type ## _slab_)
-#include <slab_details.h>
-#undef DECL_SLAB
+	slab_return_unused_chunks_(&generic_8_slab_);
+	slab_return_unused_chunks_(&generic_16_slab_);
+	slab_return_unused_chunks_(&generic_32_slab_);
+	slab_return_unused_chunks_(&generic_64_slab_);
+	slab_return_unused_chunks_(&generic_128_slab_);
+
+	slab_return_unused_chunks_(&cons_slab_);
+	slab_return_unused_chunks_(&vblock_slab_);
 }
 
 void *as_ref(Value v)
@@ -581,18 +627,22 @@ void *as_ref(Value v)
 
 ObjectType get_obj_type(void *obj)
 {
-	if (ca_within_heap_(&global_allocator_, obj))
-		return obj_address(obj).c->owner->type;
-	else
+	uint16_t t = obj_address(obj).c->owner->type;
+
+	if (t == GENERIC_TYPE)
 		return obj_to_header(obj)->type;
+	else
+		return t;
 }
 
 size_t get_obj_size(void *obj)
 {
-	if (ca_within_heap_(&global_allocator_, obj))
-		return obj_address(obj).c->owner->obj_size;
-	else
+	uint16_t t = obj_address(obj).c->owner->type;
+
+	if (t == GENERIC_TYPE)
 		return obj_to_header(obj)->size;
+	else
+		return obj_address(obj).c->owner->obj_size;
 }
 
 ObjectType get_type(Value v)
