@@ -248,6 +248,22 @@ static void slab_exit_(Slab *s)
 		ca_free_(&global_allocator_, entry);
 }
 
+static unsigned find_first_clear(uint32_t *words, unsigned b, unsigned e)
+{
+	unsigned wb = b / 32;
+	unsigned we = div_up(e, 32);
+	unsigned bit;
+
+	while ((wb != we) && (words[wb] == ~0))
+		wb++;
+
+	if (wb == we)
+		return e;
+
+	bit = __builtin_ffs(~words[wb]) - 1;
+	return (wb * 32) + bit;
+}
+
 static void *slab_alloc_(Slab *s, size_t len)
 {
 	ChunkAddress addr;
@@ -258,20 +274,19 @@ static void *slab_alloc_(Slab *s, size_t len)
 	addr.c = (Chunk *) s->chunks.next;
 	assert(len <= s->obj_size);
 
-	// FIXME: this loop is using a lot of cpu.  We need to check multiple
-	// bits per iteration.
-	for (addr.index = addr.c->search_start; addr.index < s->objs_per_chunk;
-			addr.index++) {
-		if (!marked_(addr)) {
-			mark_(addr);
-			addr.c->search_start = addr.index + 1;
-			s->nr_allocs++;
-			return addr.c->objects + (addr.index * s->obj_size);
-		}
-	}
+	addr.index = find_first_clear(addr.c->marks,
+				      addr.c->search_start, s->objs_per_chunk);
 
-	list_move(&addr.c->list, &s->full_chunks);
-	return slab_alloc_(s, len);
+	if (addr.index < s->objs_per_chunk) {
+		assert(!marked_(addr));
+		mark_(addr);
+		addr.c->search_start = addr.index + 1;
+		s->nr_allocs++;
+		return addr.c->objects + (addr.index * s->obj_size);
+	} else {
+		list_move(&addr.c->list, &s->full_chunks);
+		return slab_alloc_(s, len);
+	}
 }
 
 static void slab_clear_marks_(Slab *s)
