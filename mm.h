@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+#include "slab.h"
 #include "types.h"
 
 //----------------------------------------------------------------
@@ -44,6 +45,17 @@ void *mm_zalloc(ObjectType type, size_t s);
 void *mm_clone(void *obj);
 
 void mm_garbage_collect(Value *roots, unsigned count);
+
+//----------------------------------------------------------------
+
+extern Slab generic_8_slab_;
+extern Slab generic_16_slab_;
+extern Slab generic_32_slab_;
+extern Slab generic_64_slab_;
+extern Slab generic_128_slab_;
+
+extern Slab cons_slab_;
+extern Slab vblock_slab_;
 
 //----------------------------------------------------------------
 
