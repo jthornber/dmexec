@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "list.h"
 
@@ -21,10 +22,15 @@ extern ChunkAllocator global_allocator_;
 
 //----------------------------------------------------------------
 
+typedef struct slist__ {
+	struct slist__ *next;
+} SList;
+
 typedef struct {
 	const char *name;
 	struct list_head full_chunks;
 	struct list_head chunks;
+	SList *free_list;
 
 	uint16_t type;
 	uint16_t obj_size;
@@ -39,7 +45,7 @@ typedef struct {
 // that have objects prepended with a header.
 void slab_init(Slab *s, const char *name, uint16_t type, unsigned obj_size);
 void slab_exit(Slab *s);
-void *slab_alloc(Slab *s, size_t len);
+void slab_populate_free_list(Slab *s);
 void slab_clear_marks(Slab *s);
 void slab_return_unused_chunks(Slab *s);
 
@@ -60,6 +66,26 @@ typedef struct {
 ChunkAddress ca_address(void *obj);
 void ca_mark(ChunkAddress addr);
 bool ca_marked(ChunkAddress addr);
+
+static inline void *slab_alloc(Slab *s)
+{
+	SList *ptr;
+
+	if (!s->free_list)
+		slab_populate_free_list(s);
+
+	ptr = s->free_list;
+	s->free_list = ptr->next;
+
+	return ptr;
+}
+
+static inline void *slab_clone(Slab *s, void *ptr)
+{
+	void *new = slab_alloc(s);
+	memcpy(new, ptr, s->obj_size);
+	return new;
+}
 
 //----------------------------------------------------------------
 

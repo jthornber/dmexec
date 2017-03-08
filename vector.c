@@ -44,17 +44,6 @@ unsigned v_size(Vector *v)
 
 #define VBLOCK_SIZE (sizeof(Value) * ENTRIES_PER_VBLOCK)
 
-static VBlock vb_alloc()
-{
-	return mm_alloc(VBLOCK, VBLOCK_SIZE);
-}
-
-// FIXME: remove
-static VBlock vb_clone(VBlock vb)
-{
-	return mm_clone(vb);
-}
-
 //----------------------------------------------------------------
 // Manipulating a constructed tree
 

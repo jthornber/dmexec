@@ -282,14 +282,14 @@ static inline void *alloc_(ObjectType type, size_t s)
 
 	switch (type) {
 	case CONS:
-		return slab_alloc(&cons_slab_, s);
+		return slab_alloc(&cons_slab_);
 
 	case VBLOCK:
-		return slab_alloc(&vblock_slab_, s);
+		return slab_alloc(&vblock_slab_);
 
 	default:
 		len = s + sizeof(Header);
-		h = slab_alloc(choose_slab_(len), len);
+		h = slab_alloc(choose_slab_(len));
 		h->type = type;
 		h->size = s;
 		return h + 1;
@@ -321,7 +321,7 @@ static Header *obj_to_header(void *obj)
 void *mm_clone(void *obj)
 {
 	Slab *slab = ca_address(obj).c->owner;
-	void *new = slab_alloc(slab, slab->obj_size);
+	void *new = slab_alloc(slab);
 	memory_stats_.total_allocated += slab->obj_size;
 
 	if (slab->type == GENERIC_TYPE) {

@@ -57,6 +57,14 @@ extern Slab generic_128_slab_;
 extern Slab cons_slab_;
 extern Slab vblock_slab_;
 
+static inline VBlock vb_alloc() {
+	return slab_alloc(&vblock_slab_);
+}
+
+static inline VBlock vb_clone(VBlock vb) {
+	return slab_clone(&vblock_slab_, vb);
+}
+
 //----------------------------------------------------------------
 
 ObjectType get_obj_type(void *obj);

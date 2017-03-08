@@ -209,6 +209,7 @@ void slab_init(Slab *s, const char *name, uint16_t type, unsigned obj_size)
 	s->name = name;
 	INIT_LIST_HEAD(&s->full_chunks);
 	INIT_LIST_HEAD(&s->chunks);
+	s->free_list = NULL;
 	s->type = type;
 	s->obj_size = obj_size;
 	s->objs_per_chunk = calc_nr_objects_(obj_size);
@@ -244,7 +245,7 @@ static unsigned find_first_clear(uint32_t *words, unsigned b, unsigned e)
 	return e;
 }
 
-void *slab_alloc(Slab *s, size_t len)
+static void *alloc_one_(Slab *s)
 {
 	ChunkAddress addr;
 
@@ -252,20 +253,39 @@ void *slab_alloc(Slab *s, size_t len)
 		new_chunk_(s);
 
 	addr.c = (Chunk *) s->chunks.next;
-	assert(len <= s->obj_size);
 
 	addr.index = find_first_clear(addr.c->marks,
 				      addr.c->search_start, s->objs_per_chunk);
 
-	if (addr.index < s->objs_per_chunk) {
-		assert(!ca_marked(addr));
-		ca_mark(addr);
-		addr.c->search_start = addr.index + 1;
-		s->nr_allocs++;
-		return addr.c->objects + (addr.index * s->obj_size);
-	} else {
+	if (addr.index >= s->objs_per_chunk) {
 		list_move(&addr.c->list, &s->full_chunks);
-		return slab_alloc(s, len);
+		return NULL;
+	}
+
+	assert(!ca_marked(addr));
+	ca_mark(addr);
+	addr.c->search_start = addr.index + 1;
+	s->nr_allocs++;
+	return addr.c->objects + (addr.index * s->obj_size);
+}
+
+#define POP_TARGET 32
+
+void slab_populate_free_list(Slab *s)
+{
+	SList *ptr;
+	unsigned count = POP_TARGET;
+
+	while (count) {
+		ptr = alloc_one_(s);
+		if (ptr) {
+			ptr->next = s->free_list;
+			s->free_list = ptr;
+			count--;
+
+		} else if (s->free_list)
+			// We don't want to span more than one chunk.
+			break;
 	}
 }
 
@@ -276,6 +296,8 @@ void slab_clear_marks(Slab *s)
 	list_splice_init(&s->full_chunks, &s->chunks);
 	list_for_each_entry (c, &s->chunks, list)
 		clear_marks_(c);
+
+	s->free_list = NULL;
 }
 
 void slab_return_unused_chunks(Slab *s)
