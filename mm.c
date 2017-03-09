@@ -207,7 +207,7 @@ typedef struct {
        uint16_t size;
 } Header;
 
-static MemoryStats memory_stats_;
+MemoryStats memory_stats_;
 
 #define GENERIC_TYPE 0xff
 
@@ -247,7 +247,7 @@ void mm_exit()
 
 	ca_exit(&global_allocator_);
 	printf("\n\ntotal allocated: %llu\n",
-	       (unsigned long long) get_memory_stats()->total_allocated);
+	       (unsigned long long) memory_stats_.total_allocated);
 }
 
 static Slab *choose_slab_(size_t s)
@@ -469,13 +469,6 @@ void *as_type(ObjectType t, Value v)
 		error("type error: expected type '%s'.", type_desc(t));
 
 	return as_ref(v);
-}
-
-//----------------------------------------------------------------
-
-MemoryStats *get_memory_stats()
-{
-	return &memory_stats_;
 }
 
 //----------------------------------------------------------------

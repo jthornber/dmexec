@@ -110,7 +110,7 @@ static void t_square()
 
 static size_t total_allocated_()
 {
-	return get_memory_stats()->total_allocated;
+	return memory_stats_.total_allocated;
 }
 
 static void indent(unsigned n)

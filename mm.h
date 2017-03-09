@@ -78,7 +78,7 @@ typedef struct {
 	unsigned nr_gcs;
 } MemoryStats;
 
-MemoryStats *get_memory_stats(void);
+extern MemoryStats memory_stats_;
 
 //----------------------------------------------------------------
 
