@@ -209,7 +209,7 @@ void slab_init(Slab *s, const char *name, uint16_t type, unsigned obj_size)
 	s->name = name;
 	INIT_LIST_HEAD(&s->full_chunks);
 	INIT_LIST_HEAD(&s->chunks);
-	s->free_list = NULL;
+	s->free_end = 0;
 	s->type = type;
 	s->obj_size = obj_size;
 	s->objs_per_chunk = calc_nr_objects_(obj_size);
@@ -229,63 +229,46 @@ void slab_exit(Slab *s)
 		ca_free(&global_allocator_, entry);
 }
 
-static unsigned find_first_clear(uint32_t *words, unsigned b, unsigned e)
+void slab_populate_free_list(Slab *s)
 {
-	unsigned wb = b / 32;
-	unsigned we = div_up(e, 32);
-	unsigned bit;
-
-	while (wb != we) {
-		bit = __builtin_ffs(~words[wb]);
-		if (bit)
-			return (wb * 32) + bit - 1;
-		wb++;
-	}
-
-	return e;
-}
-
-static void *alloc_one_(Slab *s)
-{
+	unsigned count = MAX_FREE;
 	ChunkAddress addr;
+	unsigned bit;
+	uint32_t *wb, *we;
 
+restart:
 	if (list_empty(&s->chunks))
 		new_chunk_(s);
 
 	addr.c = (Chunk *) s->chunks.next;
-
-	addr.index = find_first_clear(addr.c->marks,
-				      addr.c->search_start, s->objs_per_chunk);
-
-	if (addr.index >= s->objs_per_chunk) {
-		list_move(&addr.c->list, &s->full_chunks);
-		return NULL;
-	}
-
-	assert(!ca_marked(addr));
-	ca_mark(addr);
-	addr.c->search_start = addr.index + 1;
-	s->nr_allocs++;
-	return addr.c->objects + (addr.index * s->obj_size);
-}
-
-#define POP_TARGET 32
-
-void slab_populate_free_list(Slab *s)
-{
-	SList *ptr;
-	unsigned count = POP_TARGET;
-
+	wb = addr.c->marks + (addr.c->search_start / 32);
+	we = addr.c->marks + div_up(s->objs_per_chunk, 32);
 	while (count) {
-		ptr = alloc_one_(s);
-		if (ptr) {
-			ptr->next = s->free_list;
-			s->free_list = ptr;
-			count--;
+		while (wb != we) {
+			bit = __builtin_ffs(~(*wb));
+			if (bit) {
+				bit--;
+				*wb |= (1 << bit);
+				addr.index = ((wb - addr.c->marks) * 32) + bit;
+				break;
+			}
 
-		} else if (s->free_list)
-			// We don't want to span more than one chunk.
-			break;
+			wb++;
+		}
+
+		if (addr.index >= s->objs_per_chunk || wb == we) {
+			list_move(&addr.c->list, &s->full_chunks);
+			if (!s->free_end)
+				goto restart;
+			else
+				break;
+		}
+
+		addr.c->search_start = addr.index + 1;
+		s->nr_allocs++;
+
+		s->free[s->free_end++] = addr.c->objects + (addr.index * s->obj_size);
+		count--;
 	}
 }
 
@@ -297,7 +280,7 @@ void slab_clear_marks(Slab *s)
 	list_for_each_entry (c, &s->chunks, list)
 		clear_marks_(c);
 
-	s->free_list = NULL;
+	s->free_end = 0;
 }
 
 void slab_return_unused_chunks(Slab *s)

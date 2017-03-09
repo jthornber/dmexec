@@ -26,11 +26,15 @@ typedef struct slist__ {
 	struct slist__ *next;
 } SList;
 
+
+#define MAX_FREE 32
+
 typedef struct {
 	const char *name;
 	struct list_head full_chunks;
 	struct list_head chunks;
-	SList *free_list;
+	void *free[MAX_FREE];
+	unsigned free_end;
 
 	uint16_t type;
 	uint16_t obj_size;
@@ -69,21 +73,16 @@ bool ca_marked(ChunkAddress addr);
 
 static inline void *slab_alloc(Slab *s)
 {
-	SList *ptr;
-
-	if (!s->free_list)
+	if (!s->free_end)
 		slab_populate_free_list(s);
 
-	ptr = s->free_list;
-	s->free_list = ptr->next;
-
-	return ptr;
+	return s->free[--s->free_end];
 }
 
-static inline void *slab_clone(Slab *s, void *ptr)
+static inline void *slab_clone(Slab *s, void *ptr, size_t len)
 {
 	void *new = slab_alloc(s);
-	memcpy(new, ptr, s->obj_size);
+	memcpy(new, ptr, len);
 	return new;
 }
 
