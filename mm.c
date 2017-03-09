@@ -8,8 +8,6 @@
 #include <stdint.h>
 #include <sys/mman.h>
 
-#define HEADER_MAGIC 846219U
-
 #include "error.h"
 #include "list.h"
 #include "types.h"
@@ -318,19 +316,20 @@ static Header *obj_to_header(void *obj)
 	return ((Header *) obj) - 1;
 }
 
+static void *header_to_obj(Header *h)
+{
+	return h + 1;
+}
+
 void *mm_clone(void *obj)
 {
-	Slab *slab = ca_address(obj).c->owner;
-	void *new = slab_alloc(slab);
-	memory_stats_.total_allocated += slab->obj_size;
+	Slab *s = ca_address(obj).c->owner;
 
-	if (slab->type == GENERIC_TYPE) {
-		memcpy(new, obj_to_header(obj), slab->obj_size);
-		return ((Header *) new) + 1;
-	} else {
-		memcpy(new, obj, slab->obj_size);
-		return new;
-	}
+	if (s->type == GENERIC_TYPE) {
+		Header *h = obj_to_header(obj);
+		return header_to_obj(slab_clone(s, h, sizeof(*h) + h->size));
+	} else
+		return slab_clone(s, obj, s->obj_size);
 }
 
 void mm_garbage_collect(Value *roots, unsigned count)

@@ -62,7 +62,7 @@ static inline VBlock vb_alloc() {
 }
 
 static inline VBlock vb_clone(VBlock vb) {
-	return slab_clone(&vblock_slab_, vb);
+	return slab_clone(&vblock_slab_, vb, sizeof(Value) * ENTRIES_PER_VBLOCK);
 }
 
 //----------------------------------------------------------------
