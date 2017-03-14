@@ -1,5 +1,6 @@
 PROGRAMS=\
 	dmexec \
+	hash_table_t \
 	vector_t
 
 .PHONEY: all
@@ -14,7 +15,9 @@ CFLAGS=\
 	-Wall \
 	-D_GNU_SOURCE \
 	-std=c99 \
-	-O8
+
+
+#	-O8
 
 INCLUDES=\
 	-I.
@@ -27,6 +30,8 @@ SOURCE=\
 	cons.c \
 	env.c \
 	eval.c \
+	equality.c \
+	hash_table.c \
 	mm.c \
 	print.c \
 	read.c \
@@ -61,6 +66,10 @@ dmexec: $(OBJECTS) main.o
 	$(V) $(CC) $(CFLAGS) -o $@ $+ $(LIBS)
 
 vector_t: $(OBJECTS) vector_t.o
+	@echo "    [LD]  $@"
+	$(V) $(CC) $(CFLAGS) -o $@ $+ $(LIBS)
+
+hash_table_t: $(OBJECTS) hash_table_t.o
 	@echo "    [LD]  $@"
 	$(V) $(CC) $(CFLAGS) -o $@ $+ $(LIBS)
 

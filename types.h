@@ -88,6 +88,26 @@ typedef struct __vector {
 	bool transient:1;
 } Vector;
 
+#define ENTRIES_PER_HBLOCK 32
+
+typedef struct {
+	union {
+		uint32_t map;
+		Value key;
+	};
+
+	// If this points to an HBlock, then the map field is valid else the
+	// key field.
+	Value val;
+} HashEntry;
+
+typedef HashEntry *HBlock;
+
+typedef struct {
+	unsigned nr_entries;
+	HashEntry root;
+} HashTable;
+
 //----------------------------------------------------------------
 
 #endif

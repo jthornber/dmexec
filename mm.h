@@ -18,6 +18,8 @@ typedef enum {
 	NIL,
 	VECTOR,
 	VBLOCK,
+	HTABLE,
+	HBLOCK,
 	FRAME,
 	STATIC_FRAME,
 	STATIC_ENV,
@@ -53,6 +55,9 @@ extern Slab generic_16_slab_;
 extern Slab generic_32_slab_;
 extern Slab generic_64_slab_;
 extern Slab generic_128_slab_;
+extern Slab generic_256_slab_;
+extern Slab generic_512_slab_;
+extern Slab generic_1024_slab_;
 
 extern Slab cons_slab_;
 extern Slab vblock_slab_;

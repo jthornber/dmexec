@@ -69,6 +69,14 @@ void print(FILE *stream, Value v)
 			fprintf(stream, "~vblock~");
 			break;
 
+		case HTABLE:
+			fprintf(stream, "~htable~");
+			break;
+
+		case HBLOCK:
+			fprintf(stream, "~hblock~");
+			break;
+
 		case STATIC_ENV:
 			fprintf(stream, "~static-env~");
 			break;

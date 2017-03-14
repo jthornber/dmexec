@@ -1,3 +1,4 @@
+#include "equality.h"
 #include "vector.h"
 #include "vm.h"
 
@@ -5,16 +6,6 @@
 #include <string.h>
 
 //----------------------------------------------------------------
-
-// FIXME: move somewhere for general use
-static bool equalp(Value lhs, Value rhs)
-{
-	// FIXME: fixnums only atm
-	if (get_type(lhs) != FIXNUM || get_type(rhs) != FIXNUM)
-		return false;
-
-	return lhs.i == rhs.i;
-}
 
 static void t_empty_vector()
 {

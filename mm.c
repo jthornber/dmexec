@@ -184,6 +184,23 @@ static void walk_one_(Traversal *tv, Value v)
 		break;
 	}
 
+	case HTABLE: {
+		HashTable *ht = v.ptr;
+		if (!ht->nr_entries)
+			break;
+
+		if (get_type(ht->root.val) != HBLOCK)
+			mark_value_(tv, ht->root.key);
+
+		mark_value_(tv, ht->root.val);
+		break;
+	}
+
+	case HBLOCK: {
+		// FIXME: finish
+		break;
+	}
+
 	case FRAME:
 	case STATIC_FRAME:
 	case STATIC_ENV:
@@ -216,6 +233,9 @@ Slab generic_16_slab_;
 Slab generic_32_slab_;
 Slab generic_64_slab_;
 Slab generic_128_slab_;
+Slab generic_256_slab_;
+Slab generic_512_slab_;
+Slab generic_1024_slab_;
 
 Slab cons_slab_;
 Slab vblock_slab_;
@@ -228,7 +248,10 @@ void mm_init(size_t mem_size)
 	slab_init(&generic_16_slab_, "generic-16", GENERIC_TYPE, 16);
 	slab_init(&generic_32_slab_, "generic-32", GENERIC_TYPE, 32);
 	slab_init(&generic_64_slab_, "generic-64", GENERIC_TYPE, 64);
-	slab_init(&generic_128_slab_, "generic-128", GENERIC_TYPE, 64);
+	slab_init(&generic_128_slab_, "generic-128", GENERIC_TYPE, 128);
+	slab_init(&generic_256_slab_, "generic-256", GENERIC_TYPE, 256);
+	slab_init(&generic_512_slab_, "generic-512", GENERIC_TYPE, 512);
+	slab_init(&generic_1024_slab_, "generic-1024", GENERIC_TYPE, 1024);
 
 	slab_init(&cons_slab_, "cons", CONS, sizeof(Cons));
 	slab_init(&vblock_slab_, "vblock", VBLOCK, sizeof(Value) * ENTRIES_PER_VBLOCK);
@@ -241,6 +264,9 @@ void mm_exit()
 	slab_exit(&generic_32_slab_);
 	slab_exit(&generic_64_slab_);
 	slab_exit(&generic_128_slab_);
+	slab_exit(&generic_256_slab_);
+	slab_exit(&generic_512_slab_);
+	slab_exit(&generic_1024_slab_);
 
 	slab_exit(&cons_slab_);
 	slab_exit(&vblock_slab_);
@@ -258,12 +284,15 @@ static Slab *choose_slab_(size_t s)
 		&generic_32_slab_,
 		&generic_64_slab_,
 		&generic_128_slab_,
+		&generic_256_slab_,
+		&generic_512_slab_,
+		&generic_1024_slab_,
 	};
 
 	unsigned i, n;
 
 	// FIXME: slow, use ffs
-	assert(s <= 128);
+	assert(s <= 1024);
 	for (i = 0, n = 8; ; i++, n *= 2) {
 		if (s <= n)
 			return slabs_[i];
@@ -278,6 +307,7 @@ static inline void *alloc_(ObjectType type, size_t s)
 	Header *h;
 	size_t len;
 
+	// FIXME: assume generic
 	switch (type) {
 	case CONS:
 		return slab_alloc(&cons_slab_);
