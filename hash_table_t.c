@@ -49,19 +49,41 @@ static void t_two_entries()
 	assert(!ht_lookup(ht, mk_fixnum(1), &v));
 }
 
-static void t_nine_entries()
+static void insert_many(unsigned count)
 {
 	Value v;
-	unsigned i, COUNT = 16;
+	unsigned i;
 	HashTable *ht = ht_empty();
 
-	for (i = 0; i < COUNT; i++)
+	for (i = 0; i < count; i++) {
 		ht = ht_insert(ht, mk_fixnum(i), mk_fixnum(i * i));
+		assert(ht_lookup(ht, mk_fixnum(i), &v));
+		assert(equalp(mk_fixnum(i * i), v));
 
-	for (i = 0; i < COUNT; i++) {
+		if (!(i % (16 * 1024))) {
+			Value val = mk_ref(ht);
+			mm_garbage_collect(&val, 1);
+		}
+	}
+
+	for (i = 0; i < count; i++) {
 		assert(ht_lookup(ht, mk_fixnum(i), &v));
 		assert(equalp(mk_fixnum(i * i), v));
 	}
+}
+static void t_single_level()
+{
+	insert_many(16);
+}
+
+static void t_two_levels()
+{
+	insert_many(256);
+}
+
+static void t_100k()
+{
+	insert_many(1024 * 1024);
 }
 
 //----------------------------------------------------------------
@@ -94,11 +116,13 @@ static void run(const char *name, void (*fn)())
 
 int main(int argc, const char *argv[])
 {
-	mm_init(32 * 1024 * 1024);
+	mm_init(96 * 1024 * 1024);
 	run("empty", t_empty);
 	run("single entry", t_single_entry);
 	run("two entries", t_two_entries);
-	run("nine entries", t_nine_entries);
+	run("single level", t_single_level);
+	run("two levels", t_two_levels);
+	run("100k", t_100k);
 	mm_exit();
 
 	return 0;

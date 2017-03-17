@@ -150,6 +150,13 @@ static void mark_value_(Traversal *tv, Value v)
 	}
 }
 
+static void walk_he_(Traversal *tv, HashEntry *he)
+{
+	if (get_type(he->val) != HBLOCK)
+		mark_value_(tv, he->key);
+	mark_value_(tv, he->val);
+}
+
 static void walk_one_(Traversal *tv, Value v)
 {
 	switch (get_type(v)) {
@@ -186,18 +193,17 @@ static void walk_one_(Traversal *tv, Value v)
 
 	case HTABLE: {
 		HashTable *ht = v.ptr;
-		if (!ht->nr_entries)
-			break;
-
-		if (get_type(ht->root.val) != HBLOCK)
-			mark_value_(tv, ht->root.key);
-
-		mark_value_(tv, ht->root.val);
+		if (ht->nr_entries)
+			walk_he_(tv, &ht->root);
 		break;
 	}
 
 	case HBLOCK: {
-		// FIXME: finish
+		unsigned i;
+		HBlock hb = v.ptr;
+		unsigned nr_entries = get_obj_size(hb) / sizeof(HashEntry);
+		for (i = 0; i < nr_entries; i++)
+			walk_he_(tv, hb + i);
 		break;
 	}
 
@@ -371,6 +377,9 @@ void mm_garbage_collect(Value *roots, unsigned count)
 	slab_clear_marks(&generic_32_slab_);
 	slab_clear_marks(&generic_64_slab_);
 	slab_clear_marks(&generic_128_slab_);
+	slab_clear_marks(&generic_256_slab_);
+	slab_clear_marks(&generic_512_slab_);
+	slab_clear_marks(&generic_1024_slab_);
 
 	slab_clear_marks(&cons_slab_);
 	slab_clear_marks(&vblock_slab_);
@@ -386,6 +395,9 @@ void mm_garbage_collect(Value *roots, unsigned count)
 	slab_return_unused_chunks(&generic_32_slab_);
 	slab_return_unused_chunks(&generic_64_slab_);
 	slab_return_unused_chunks(&generic_128_slab_);
+	slab_return_unused_chunks(&generic_256_slab_);
+	slab_return_unused_chunks(&generic_512_slab_);
+	slab_return_unused_chunks(&generic_1024_slab_);
 
 	slab_return_unused_chunks(&cons_slab_);
 	slab_return_unused_chunks(&vblock_slab_);

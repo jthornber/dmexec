@@ -88,7 +88,7 @@ typedef struct __vector {
 	bool transient:1;
 } Vector;
 
-#define ENTRIES_PER_HBLOCK 32
+#define ENTRIES_PER_HBLOCK 16
 
 typedef struct {
 	union {
