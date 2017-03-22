@@ -1,45 +1,39 @@
 #include "env.h"
+#include "equality.h"
 
 #include <assert.h>
 
 //----------------------------------------------------------------
 
-StaticEnv *r_alloc() {
-	StaticEnv *r = mm_zalloc(STATIC_ENV, sizeof(*r));
+StaticEnv *r_alloc()
+{
+	StaticEnv *r = mm_alloc(STATIC_ENV, sizeof(*r));
+	r->constants = v_empty();
+	r->frames = v_empty();
 	return r;
 }
 
 void r_push_names(StaticEnv *r, Value ns)
 {
-	unsigned i = 0, len = list_len(ns);
-	StaticFrame *f = mm_alloc(STATIC_FRAME, sizeof(*f) + sizeof(Symbol *) * len);
-	f->nr_syms = len;
-	while (is_cons(ns)) {
-		f->syms[i++] = as_type(SYMBOL, car(ns));
-		ns = cdr(ns);
-	}
-
-	f->prev = r->frames;
-	r->frames = f;
+	r->frames = v_push(r->frames, list_to_vector(ns));
 }
 
 void r_pop_names(StaticEnv *r)
 {
-	assert(r->frames);
-	r->frames = r->frames->prev;
+	r->frames = v_pop(r->frames);
 }
 
 Kind compute_kind(StaticEnv *r, Symbol *sym)
 {
-	unsigned i = 0, j;
-	StaticFrame *f = r->frames;
+	unsigned i = 0, j, nr_frames = v_size(r->frames);
+	unsigned nr_syms;
 
-	// local?
-	while (f) {
-		for (j = 0; j < f->nr_syms; j++)
-			if (sym == f->syms[j])
-				return (Kind) {KindLocal, i, j};
-		f = f->prev;
+	for (i = nr_frames; i; i--) {
+		Vector *f = v_ref(r->frames, i).ptr;
+		nr_syms = v_size(f);
+		for (j = 0; j < nr_syms; j++)
+			if (equalp(v_ref(f, j), mk_ref(sym)))
+				return (Kind) {KindLocal, nr_frames - i, j};
 	}
 
 	error("implement global and predefinied look up\n");
@@ -52,19 +46,13 @@ Kind compute_kind(StaticEnv *r, Symbol *sym)
 
 unsigned r_add_constant(StaticEnv *r, Value v)
 {
-	unsigned i;
-
-	if (r->nr_constants == MAX_CONSTANTS)
-		error("too many constants");
-
-	i = r->nr_constants++;
-	r->constants[i] = v;
-	return i;
+	r->constants = v_push(r->constants, v);
+	return v_size(r->constants) - 1;
 }
 
 Value r_constant(StaticEnv *r, unsigned index)
 {
-	return r->constants[index];
+	return v_ref(r->constants, index);
 }
 
 //----------------------------------------------------------------

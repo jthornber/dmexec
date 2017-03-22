@@ -8,6 +8,7 @@
 
 
 Vector *v_empty();
+Value list_to_vector(Value xs);
 
 unsigned v_size(Vector *v);
 Value v_ref(Vector *v, unsigned i);
@@ -15,7 +16,8 @@ Value v_ref(Vector *v, unsigned i);
 // Immutable operations are the default
 Vector *v_set(Vector *v, unsigned i, Value val);
 Vector *v_resize(Vector *v, unsigned new_size, Value init);
-Vector *v_append(Vector *v, Value val);
+Vector *v_push(Vector *v, Value val);
+Vector *v_pop(Vector *v);
 
 /*
  * Setting transient mode speeds things up by dropping immutability *within*

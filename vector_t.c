@@ -16,7 +16,7 @@ static void t_empty_vector()
 static void t_append_once()
 {
 	Vector *v = v_empty();
-	Vector *v2 = v_append(v, mk_fixnum(123));
+	Vector *v2 = v_push(v, mk_fixnum(123));
 	assert(v2 != v);
 	assert(v_size(v2) == 1);
 	assert(v_size(v) == 0);
@@ -30,7 +30,7 @@ static void t_append32()
 	Vector *v = v_empty();
 
 	for (i = 0; i < count; i++)
-		v = v_append(v, mk_fixnum(i));
+		v = v_push(v, mk_fixnum(i));
 
 	for (i = 0; i < count; i++)
 		assert(equalp(v_ref(v, i), mk_fixnum(i)));
@@ -43,7 +43,7 @@ static void t_append_million()
 	Vector *v = v_empty();
 
 	for (i = 0; i < count; i++) {
-		v = v_append(v, mk_fixnum(i));
+		v = v_push(v, mk_fixnum(i));
 		assert(equalp(v_ref(v, i), mk_fixnum(i)));
 
 		if (!(i % (32 * 1024))) {

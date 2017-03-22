@@ -81,10 +81,6 @@ void print(FILE *stream, Value v)
 			fprintf(stream, "~static-env~");
 			break;
 
-		case STATIC_FRAME:
-			fprintf(stream, "~static-frame~");
-			break;
-
 		case FRAME:
 			fprintf(stream, "~frame~");
 			break;

@@ -32,6 +32,22 @@ Vector *v_empty()
 #endif
 }
 
+Value list_to_vector(Value xs)
+{
+	Vector *v = v_empty();
+
+	v_transient_begin(v);
+
+	while (!is_nil(xs)) {
+		v_push(v, car(xs));
+		xs = cdr(xs);
+	}
+
+	v_transient_end(v);
+
+	return mk_ref(v);
+}
+
 static Vector *v_shadow(Vector *v)
 {
 	return v->transient ? v : mm_clone(v);
@@ -285,9 +301,15 @@ Vector *v_resize(Vector *v, unsigned new_size, Value init)
 		return v;
 }
 
-Vector *v_append(Vector *v, Value val)
+Vector *v_push(Vector *v, Value val)
 {
 	return grow_(v, v->size + 1, val);
+}
+
+Vector *v_pop(Vector *v)
+{
+	assert(v->size);
+	return shrink_(v, v->size - 1);
 }
 
 //----------------------------------------------------------------

@@ -25,26 +25,18 @@ typedef struct {
 
 //----------------------------------------------------------------
 
-typedef struct __static_frame {
-	struct __static_frame *prev;
-	unsigned nr_syms;
-	Symbol *syms[];
-} StaticFrame;
-
-#define MAX_CONSTANTS 1024
-#define MAX_PRIMS 1024
-
 typedef struct {
 	// FIXME: I'm not sure if the constants should be in here, or in the
 	// vm.
-	unsigned nr_constants;
-	Value constants[MAX_CONSTANTS];
+	Vector *constants;
 
-	StaticFrame *frames;
+	// Frames are vectors of symbols
+	Vector *frames;
 } StaticEnv;
 
 StaticEnv *r_alloc();
 
+// ns is a list of symbols
 void r_push_names(StaticEnv *r, Value ns);
 void r_pop_names(StaticEnv *r);
 Kind compute_kind(StaticEnv *r, Symbol *sym);

@@ -21,7 +21,6 @@ typedef enum {
 	HTABLE,
 	HBLOCK,
 	FRAME,
-	STATIC_FRAME,
 	STATIC_ENV,
 	THUNK,
 	RAW,

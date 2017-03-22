@@ -208,7 +208,6 @@ static void walk_one_(Traversal *tv, Value v)
 	}
 
 	case FRAME:
-	case STATIC_FRAME:
 	case STATIC_ENV:
 	case THUNK:
 	case RAW:
