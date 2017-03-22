@@ -24,6 +24,7 @@ typedef struct vm {
 	Value arg1;
 	Value arg2;
 	Stack stack;
+	Vector *constants;
 } VM;
 
 // Rather than constantly pass the single vm instance around I'm going to

@@ -15,7 +15,8 @@ CFLAGS=\
 	-Wall \
 	-D_GNU_SOURCE \
 	-std=c99 \
-	-O8
+
+	#-O8
 
 INCLUDES=\
 	-I.

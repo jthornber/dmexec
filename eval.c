@@ -257,6 +257,7 @@ static inline bool step(VM *vm)
 		break;
 
 	case CONSTANT:
+		vm->val = v_ref(vm->constants, shift16(vm->code));
 		break;
 
 	case CREATE_CLOSURE:
@@ -385,12 +386,6 @@ static void run(VM *vm)
 		;
 }
 
-static unsigned add_constant(StaticEnv *r, Value v)
-{
-	// FIXME: finish
-	return 0;
-}
-
 static bool dis_instr(Thunk *t, StaticEnv *r)
 {
 	unsigned i, j;
@@ -398,7 +393,7 @@ static bool dis_instr(Thunk *t, StaticEnv *r)
 	if (t->b >= t->e)
 		return false;
 
-	printf("    ");
+	printf("  ");
 
 	switch (shift_op(t)) {
 	case ALLOCATE_DOTTED_FRAME:
@@ -438,7 +433,7 @@ static bool dis_instr(Thunk *t, StaticEnv *r)
 		break;
 
 	case CONSTANT:
-		printf("constant %u", shift8(t));
+		printf("constant %u", shift16(t));
 		break;
 
 	case CREATE_CLOSURE:
@@ -480,7 +475,7 @@ static bool dis_instr(Thunk *t, StaticEnv *r)
 		break;
 
 	case GLOBAL_REF:
-		printf("global_ref");
+		printf("global_ref %u", shift16(t));
 		break;
 
 	case GLOBAL_SET:
@@ -768,8 +763,7 @@ Thunk *compile(Value e, StaticEnv *r, bool tail);
 
 static Thunk *c_quotation(Value v, StaticEnv *r, bool tail)
 {
-	unsigned i = add_constant(r, v);
-	return i_constant(i);
+	return i_constant(r_add_constant(r, v));
 }
 
 static Thunk *c_reference(Value n, StaticEnv *r, bool tail)
@@ -850,9 +844,9 @@ static Thunk *c_fix_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 	Thunk *t;
 	unsigned arity = list_len(ns);
 
-	r_push_names(r, ns);
+	r_push_frame(r, ns);
 	t = c_sequence(es, r, true);
-	r_pop_names(r);
+	r_pop_frame(r);
 
 	return i_fix_closure(t, arity);
 }
@@ -862,9 +856,9 @@ static Thunk *c_dotted_abstraction(Value ns, Value es, StaticEnv *r, bool tail)
 	Thunk *t;
 	unsigned arity = list_len(ns) - 1; // extra param is already on here
 
-	r_push_names(r, ns);
+	r_push_frame(r, ns);
 	t = c_sequence(es, r, tail);
-	r_pop_names(r);
+	r_pop_frame(r);
 
 	return i_nary_closure(t, arity);
 }
@@ -994,6 +988,19 @@ Thunk *compile(Value e, StaticEnv *r, bool tail)
 	}
 }
 
+void print_constants_(Vector *cs)
+{
+	unsigned nr = v_size(cs);
+	unsigned i;
+
+	printf("constants:\n");
+	for (i = 0; i < nr; i++) {
+		printf("  %u: ", i);
+		print(stdout, v_ref(cs, i));
+		printf("\n");
+	}
+}
+
 Value eval(VM *vm, Value sexp)
 {
 	StaticEnv *r = r_alloc();
@@ -1001,8 +1008,7 @@ Value eval(VM *vm, Value sexp)
 
 	printf("disassembly:\n");
 	disassemble(t, r);
-	printf("\n\n");
-
+	print_constants_(r->constants);
 	return sexp;
 }
 

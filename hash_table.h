@@ -9,6 +9,8 @@
 
 HashTable *ht_empty();
 
+unsigned ht_size(HashTable *ht);
+
 // FIXME: keys can only be fixnum atm.
 HashTable *ht_insert(HashTable *ht, Value k, Value v);
 bool ht_lookup(HashTable *ht, Value k, Value *v);

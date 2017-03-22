@@ -54,6 +54,11 @@ HashTable *ht_empty()
 	return ht;
 }
 
+unsigned ht_size(HashTable *ht)
+{
+	return ht->nr_entries;
+}
+
 static unsigned pop_count(uint32_t bits, unsigned bits_below)
 {
 	bits &= (1 << bits_below) - 1;

@@ -26,19 +26,20 @@ typedef struct {
 //----------------------------------------------------------------
 
 typedef struct {
-	// FIXME: I'm not sure if the constants should be in here, or in the
-	// vm.
 	Vector *constants;
 
 	// Frames are vectors of symbols
 	Vector *frames;
+	HashTable *predefined;
+	HashTable *globals;
+
 } StaticEnv;
 
 StaticEnv *r_alloc();
 
 // ns is a list of symbols
-void r_push_names(StaticEnv *r, Value ns);
-void r_pop_names(StaticEnv *r);
+void r_push_frame(StaticEnv *r, Value ns);
+void r_pop_frame(StaticEnv *r);
 Kind compute_kind(StaticEnv *r, Symbol *sym);
 
 unsigned r_add_constant(StaticEnv *r, Value v);
