@@ -28,7 +28,7 @@ void r_pop_frame(StaticEnv *r)
 	r->frames = v_pop(r->frames);
 }
 
-Kind compute_kind(StaticEnv *r, Symbol *sym)
+Kind compute_kind(StaticEnv *r, String *sym)
 {
 	Value v;
 	unsigned nr_syms;

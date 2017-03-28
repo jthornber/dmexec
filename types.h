@@ -8,6 +8,28 @@
 
 //----------------------------------------------------------------
 
+// Update type_desc() if you change this.
+typedef enum {
+	PRIMITIVE,
+	CLOSURE,
+	STRING,
+	SYMBOL,
+	CONS,
+	NIL,
+	VECTOR,
+	VBLOCK,
+	HTABLE,
+	HBLOCK,
+	FRAME,
+	STATIC_ENV,
+	THUNK,
+	RAW,
+
+	/* these are always tagged immediate values */
+	// FIXME we need 64 bit integers for device sizes
+	FIXNUM,
+} ObjectType;
+
 typedef union value {
 	void *ptr;
 	int32_t i;
@@ -41,6 +63,7 @@ typedef struct {
 	int fixnum;
 } Token;
 
+// FIXME: remove this limit, use a Vector instead.
 #define MAX_STACK 4096
 
 typedef struct {
@@ -57,15 +80,6 @@ typedef struct _frame {
 typedef struct {
 	unsigned char *b, *e, *alloc_e;
 } Thunk;
-
-// FIXME: replace with a hash
-typedef struct _symbol {
-	struct _symbol *left, *right;
-	// FIXME: store globals in separate hash table
-	bool global_set;
-	Value global;
-	String *str;
-} Symbol;
 
 typedef struct {
   Value car;

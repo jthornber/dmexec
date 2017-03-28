@@ -1,6 +1,6 @@
 #include "cons.h"
 #include "env.h"
-#include "symbol.h"
+#include "string_type.h"
 #include "vm.h"
 
 #include <assert.h>
@@ -295,6 +295,7 @@ static inline bool step(VM *vm)
 		break;
 
 	case GLOBAL_REF:
+		vm->val = v_ref(vm->globals, shift16(vm->code));
 		break;
 
 	case GOTO:
@@ -748,14 +749,6 @@ static Thunk *i_pack_args(unsigned argc, Thunk **args)
 }
 
 //----------------------------------------------------------------
-// Static Environment
-
-static bool symbol_eq(Symbol *sym, const char *name)
-{
-	return string_cmp_cstr(sym->str, name) == 0;
-}
-
-//----------------------------------------------------------------
 // Compilation
 
 Thunk *compile(Value e, StaticEnv *r, bool tail);
@@ -786,7 +779,7 @@ static Thunk *c_reference(Value n, StaticEnv *r, bool tail)
 	return NULL;
 }
 
-static Thunk *c_assignment(Symbol *n, Value e, StaticEnv *r, bool tail)
+static Thunk *c_assignment(String *n, Value e, StaticEnv *r, bool tail)
 {
 	Thunk *t = compile(e, r, false);
 	Kind k = compute_kind(r, n);
@@ -930,7 +923,7 @@ static Thunk *c_primitive_application(Value e, Value es, StaticEnv *r, bool tail
 static Thunk *c_application(Value e, Value es, StaticEnv *r, bool tail)
 {
 	// FIXME: check es is a proper list
-	if (is_symbol(e)) {
+	if (is_type(SYMBOL, e)) {
 		Kind k = compute_kind(r, as_ref(e));
 		switch (k.t) {
 		case KindLocal:
@@ -943,8 +936,8 @@ static Thunk *c_application(Value e, Value es, StaticEnv *r, bool tail)
 		}
 
 	} else if (is_cons(e) &&
-		   is_symbol(car(e)) &&
-		   symbol_eq(as_ref(car(e)), "lambda"))
+		   is_type(SYMBOL, car(e)) &&
+		   !string_cmp_cstr(as_ref(car(e)), "lambda"))
 		return c_closed_application(e, es, r, tail);
 
 	else
@@ -958,22 +951,22 @@ static Thunk *c_application(Value e, Value es, StaticEnv *r, bool tail)
 Thunk *compile(Value e, StaticEnv *r, bool tail)
 {
 	if (is_cons(e)) {
-		if (is_symbol(car(e))) {
-			Symbol *s = as_ref(car(e));
-			if (symbol_eq(s, "quote"))
+		if (is_type(SYMBOL, car(e))) {
+			String *s = as_ref(car(e));
+			if (!string_cmp_cstr(s, "quote"))
 				return c_quotation(cadr(e), r, tail);
 
-			else if (symbol_eq(s, "lambda"))
+			else if (!string_cmp_cstr(s, "lambda"))
 				return c_abstraction(cadr(e), cddr(e), r, tail);
 
-			else if (symbol_eq(s, "if"))
+			else if (!string_cmp_cstr(s, "if"))
 				return c_alternative(cadr(e), caddr(e), cadddr(e),
 					      	     r, tail);
 
-			else if (symbol_eq(s, "begin"))
+			else if (!string_cmp_cstr(s, "begin"))
 				return c_sequence(cdr(e), r, tail);
 
-			else if (symbol_eq(s, "set!"))
+			else if (!string_cmp_cstr(s, "set!"))
 				return c_assignment(as_ref(cadr(e)), caddr(e), r, tail);
 
 			// Fall through
@@ -981,7 +974,7 @@ Thunk *compile(Value e, StaticEnv *r, bool tail)
 
 		return c_application(car(e), cdr(e), r, tail);
 	} else {
-		if (is_symbol(e))
+		if (is_type(SYMBOL, e))
 			return c_reference(e, r, tail);
 		else
 			return c_quotation(e, r, tail);

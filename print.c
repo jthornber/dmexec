@@ -17,9 +17,9 @@ void print_string(FILE *stream, String *str)
 	fputc('\"', stream);
 }
 
-static void print_symbol(FILE *stream, Symbol *sym)
+static void print_symbol(FILE *stream, String *sym)
 {
-	print_string_unquoted(stream, sym->str);
+	print_string_unquoted(stream, sym);
 }
 
 static void print_list(FILE *stream, Value v);

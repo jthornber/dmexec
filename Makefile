@@ -35,7 +35,6 @@ SOURCE=\
 	print.c \
 	read.c \
 	string_type.c \
-	symbol.c \
 	slab.c \
 	utils.c \
 	vector.c

@@ -8,28 +8,6 @@
 
 //----------------------------------------------------------------
 
-// Update type_desc() if you change this.
-typedef enum {
-	PRIMITIVE,
-	CLOSURE,
-	STRING,
-	SYMBOL,
-	CONS,
-	NIL,
-	VECTOR,
-	VBLOCK,
-	HTABLE,
-	HBLOCK,
-	FRAME,
-	STATIC_ENV,
-	THUNK,
-	RAW,
-
-	/* these are always tagged immediate values */
-	// FIXME we need 64 bit integers for device sizes
-	FIXNUM,
-} ObjectType;
-
 // Call these two from your main to set up the garbage collection.
 void mm_init(size_t mem_size);
 void mm_exit();
@@ -97,6 +75,8 @@ Value clone_value(Value v);
 
 void *as_ref(Value v);
 ObjectType get_type(Value v);
+bool is_type(ObjectType t, Value v);
+bool obj_is_type(ObjectType t, void *v);
 
 Tag get_tag(Value v);
 Value mk_nil(void);

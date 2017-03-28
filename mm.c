@@ -440,6 +440,16 @@ ObjectType get_type(Value v)
 	return get_obj_type(as_ref(v));
 }
 
+bool is_type(ObjectType t, Value v)
+{
+	return get_type(v) == t;
+}
+
+bool obj_is_type(ObjectType t, void *v)
+{
+	return get_obj_type(v) == t;
+}
+
 //----------------------------------------------------------------
 // Values - immediate or reference
 //

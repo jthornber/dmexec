@@ -1,7 +1,7 @@
 #include "equality.h"
 #include "hash_table.h"
 #include "mm.h"
-#include "symbol.h"
+#include "string.h"
 #include "vm.h"
 
 #include <assert.h>

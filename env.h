@@ -40,7 +40,7 @@ StaticEnv *r_alloc();
 // ns is a list of symbols
 void r_push_frame(StaticEnv *r, Value ns);
 void r_pop_frame(StaticEnv *r);
-Kind compute_kind(StaticEnv *r, Symbol *sym);
+Kind compute_kind(StaticEnv *r, String *sym);
 
 unsigned r_add_constant(StaticEnv *r, Value v);
 void r_add_primitive(StaticEnv *r, Value v);

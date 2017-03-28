@@ -187,9 +187,6 @@ static void shift(TokenStream *ts)
 static bool read_list(TokenStream *ts, Value *result);
 static bool read_quote(TokenStream *ts, Value *result);
 
-// FIXME: remove this
-static Symbol *symbol_root = NULL;
-
 bool read_sexp(TokenStream *ts, Value *result)
 {
 	Token *tok = peek(ts);
@@ -204,12 +201,12 @@ bool read_sexp(TokenStream *ts, Value *result)
 		break;
 
 	case TOK_STRING:
-		*result = mk_ref(string_clone(&tok->str));
+		*result = mk_ref(mk_string(STRING, tok->str.b, tok->str.e));
 		shift(ts);
 		break;
 
 	case TOK_SYM:
-		*result = mk_symbol(&symbol_root, &tok->str);
+		*result = mk_ref(mk_string(SYMBOL, tok->str.b, tok->str.e));
 		shift(ts);
 		break;
 
@@ -263,7 +260,7 @@ static bool read_quote(TokenStream *ts, Value *result)
 	ListBuilder lb;
 
 	lb_init(&lb);
-	lb_append(&lb, mk_symbol(&symbol_root, string_clone_cstr("quote")));
+	lb_append(&lb, mk_ref(mk_string_from_cstr(SYMBOL, "quote")));
 
 	if (!read_sexp(ts, &result2))
 		error("malformed quote; unexpected eof");

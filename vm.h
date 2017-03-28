@@ -25,6 +25,8 @@ typedef struct vm {
 	Value arg2;
 	Stack stack;
 	Vector *constants;
+	Vector *globals;
+	Vector *global_syms; // for debug
 } VM;
 
 // Rather than constantly pass the single vm instance around I'm going to
@@ -32,9 +34,6 @@ typedef struct vm {
 // passed into practically every function eg. array_pop().  This global is
 // set during evaluation, it is _not_ set when defining primitives.
 extern VM *global_vm;
-
-// FIXME: why aren't mk_{string, fixnum ...} in mm.h?
-Value mk_string(const char *b, const char *e);
 
 typedef Value (*Prim0)(void);
 typedef Value (*Prim1)(Value);
@@ -47,7 +46,6 @@ void print_value(FILE *stream, Value v);
 Value mk_fixnum(int i);
 bool is_false(Value v);
 
-Value mk_symbol(Symbol **root, String *str);
 Value mk_word(String *str);
 Value mk_word_cstr(char *str);
 
