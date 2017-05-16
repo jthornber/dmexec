@@ -8,6 +8,9 @@
 
 static bool more_input(String *in)
 {
+	if (in->e < in->b)
+		error("input overrun\n");
+
 	return in->b != in->e;
 }
 
@@ -47,6 +50,10 @@ static bool is_sym_char(char c)
 static Token scan_sym(String *in)
 {
 	Token tok;
+
+	if (!is_sym_char(*in->b))
+		error("this isn't a symbol");
+
 	tok.type = TOK_SYM;
 	tok.str.b = in->b;
 

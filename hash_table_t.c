@@ -71,6 +71,7 @@ static void insert_many(unsigned count)
 		assert(equalp(mk_fixnum(i * i), v));
 	}
 }
+
 static void t_single_level()
 {
 	insert_many(16);

@@ -29,7 +29,7 @@ static String *string_clone_(ObjectType t, String *str)
 	copy->b = (const char *) (copy + 1);
 	copy->e = copy->b + len;
 	memcpy((char *) copy->b, str->b, len);
-	memset((char *) str->e, 0, padding);
+	memset((char *) copy->e, 0, padding);
 
 	return copy;
 }
