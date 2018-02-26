@@ -8,6 +8,7 @@
 
 #include "vector.h"
 #include "cons.h"
+#include "env.h"
 #include "error.h"
 #include "list.h"
 #include "mm.h"
@@ -35,10 +36,6 @@ typedef struct vm {
 // set during evaluation, it is _not_ set when defining primitives.
 extern VM *global_vm;
 
-typedef Value (*Prim0)(void);
-typedef Value (*Prim1)(Value);
-typedef Value (*Prim2)(Value, Value);
-
 
 Value mk_quot(void);
 void print_value(FILE *stream, Value v);
@@ -50,8 +47,6 @@ Value mk_word(String *str);
 Value mk_word_cstr(char *str);
 
 void print_string(FILE *stream, String *str);
-
-Value eval(VM *vm, Value sexp);
 
 typedef struct {
 	String *in;

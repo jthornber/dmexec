@@ -14,6 +14,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include "eval.h"
 #include "namespace.h"
 #include "primitives.h"
 #include "string_type.h"
@@ -145,7 +146,7 @@ const char *rl_gets()
 	return line_read;
 }
 
-static int repl(VM *vm)
+static int repl(StaticEnv *r, VM *vm)
 {
 	const char *buffer;
 	TokenStream stream;
@@ -162,7 +163,7 @@ static int repl(VM *vm)
 		input.e = buffer + strlen(buffer);
 		stream_init(&input, &stream);
 		while (read_sexp(&stream, &v)) {
-			print(stdout, eval(vm, v));
+			print(stdout, eval(r, vm, v));
 			printf("\n");
 		}
 	}
@@ -173,11 +174,13 @@ static int repl(VM *vm)
 int main(int argc, char **argv)
 {
 	VM vm;
+	StaticEnv *r;
 
 	mm_init(64 * 1024 * 1024);
+	r = r_alloc();
 //	init_vm(&vm);
-//	def_basic_primitives(&vm);
-//	def_dm_primitives(&vm);
+	def_basic_primitives(r);
+	//def_dm_primitives(&r);
 
 	//load_file(&vm, "prelude.dm");
 #if 0
@@ -186,7 +189,7 @@ int main(int argc, char **argv)
 			load_file(&vm, argv[i]);
 	else
 #endif
-	repl(&vm);
+	repl(r, &vm);
 	mm_exit();
 
 	return 0;

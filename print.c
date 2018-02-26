@@ -34,7 +34,7 @@ void print(FILE *stream, Value v)
 	case TAG_REF:
 		switch (get_type(v)) {
 		case PRIMITIVE:
-			fprintf(stream, "~primitive~");
+			fprintf(stream, "#<procedure %s>", ((Primitive *) as_ref(v))->name);
 			break;
 
 		case STRING:

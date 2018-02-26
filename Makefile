@@ -6,7 +6,7 @@ PROGRAMS=\
 .PHONEY: all
 all: $(PROGRAMS)
 
-V=
+V=@
 RM:=rm -f
 CC:=gcc
 CFLAGS=\
@@ -22,7 +22,6 @@ INCLUDES=\
 	-I.
 
 LIBS=\
-	-lgc \
 	-lreadline
 
 SOURCE=\
@@ -32,6 +31,7 @@ SOURCE=\
 	equality.c \
 	hash_table.c \
 	mm.c \
+	primitives.c \
 	print.c \
 	read.c \
 	string_type.c \

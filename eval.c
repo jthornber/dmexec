@@ -33,7 +33,7 @@ static void t_append(Thunk *t, uint8_t byte)
 		size_t old_len = t->e - t->b;
 		// FIXME: make sure this throws an exception or calls error on
 		// failure.
-		t->b = realloc(t->b, 2 * old_len);
+		t->b = mm_realloc(t->b, 2 * old_len);
 		t->e = t->b + old_len;
 		t->alloc_e = t->b + 2 * old_len;
 	}
@@ -49,7 +49,7 @@ static void t_merge(Thunk *t, Thunk *rhs)
 	if (remaining < extra) {
 		unsigned old_size = t_size(t);
 		unsigned new_size = t_size(t) + t_size(rhs) * 2;
-		t->b = realloc(t->b, new_size);
+		t->b = mm_realloc(t->b, new_size);
 		t->e = t->b + old_size;
 		t->alloc_e = t->b + new_size;
 	}
@@ -187,7 +187,10 @@ typedef enum {
 	POP_ARG2,
 	POP_CONS_FRAME,
 	POP_FRAME,
-	PREDEFINED,
+	CALL_PRIM0,
+	CALL_PRIM1,
+	CALL_PRIM2,
+	CALL_PRIM_LIST,
 	RETURN,
 
 	SHALLOW_ARGUMENT_REF,
@@ -248,6 +251,7 @@ static inline bool step(VM *vm)
 		break;
 
 	case CALL2:
+		shift16(vm->code);
 		break;
 
 	case CALL3:
@@ -329,7 +333,10 @@ static inline bool step(VM *vm)
 		vm->env = f;
 		break;
 
-	case PREDEFINED:
+	case CALL_PRIM0:
+	case CALL_PRIM1:
+	case CALL_PRIM2:
+	case CALL_PRIM_LIST:
 		break;
 
 	case ENV_PRESERVE:
@@ -421,9 +428,11 @@ static bool dis_instr(Thunk *t, StaticEnv *r)
 		printf("call1");
 		break;
 
-	case CALL2:
-		printf("call2");
+	case CALL2: {
+		Primitive *p = as_ref(v_ref(r->constants, shift16(t)));
+		printf("call2 %s", p->name);
 		break;
+	}
 
 	case CALL3:
 	     	printf("call3");
@@ -496,7 +505,7 @@ static bool dis_instr(Thunk *t, StaticEnv *r)
 		break;
 
 	case PACK_ARG:
-		printf("pack_arg");
+		printf("pack_arg %u", shift8(t));
 		break;
 
 	case POP_ARG1:
@@ -515,8 +524,20 @@ static bool dis_instr(Thunk *t, StaticEnv *r)
 		printf("pop_frame");
 		break;
 
-	case PREDEFINED:
-		printf("predefined");
+	case CALL_PRIM0:
+		printf("call_prim0");
+		break;
+
+	case CALL_PRIM1:
+		printf("call_prim1");
+		break;
+
+	case CALL_PRIM2:
+		printf("call_prim2");
+		break;
+
+	case CALL_PRIM_LIST:
+		printf("call_prim_list");
 		break;
 
 	case RETURN:
@@ -638,10 +659,32 @@ static Thunk *i_global_set(unsigned i, Thunk *val)
 	return t;
 }
 
-static Thunk *i_predefined(unsigned i)
+static Thunk *i_primitive(unsigned i, unsigned argc, Thunk *args)
 {
-	Thunk *t = t_new(3);
-	op16(t, PREDEFINED, i);
+	Thunk *t = t_new(t_size(args) + 3);
+	t_merge(t, args);
+
+	switch (argc) {
+	case 0:
+		op16(t, CALL0, i);
+		break;
+
+	case 1:
+		op16(t, CALL1, i);
+		break;
+
+	case 2:
+		op16(t, CALL2, i);
+		break;
+
+	case 3:
+		op16(t, CALL3, i);
+		break;
+
+	default:
+		error("primitives must have <= 3 args\n");
+	}
+
 	return t;
 }
 
@@ -772,8 +815,8 @@ static Thunk *c_reference(Value n, StaticEnv *r, bool tail)
 	case KindGlobal:
 		return i_checked_global_ref(k.i);
 
-	case KindPredefined:
-		return i_predefined(k.i);
+	case KindConstant:
+		return i_constant(k.i);
 	}
 
 	return NULL;
@@ -794,7 +837,7 @@ static Thunk *c_assignment(String *n, Value e, StaticEnv *r, bool tail)
 	case KindGlobal:
 		return i_global_set(k.i, t);
 
-	case KindPredefined:
+	case KindConstant:
 		error("Predefined variables are immutable.");
 	}
 
@@ -905,19 +948,24 @@ static Thunk *c_closed_application(Value e, Value es, StaticEnv *r, bool tail)
 	return NULL;
 }
 
-static Thunk *c_primitive_application(Value e, Value es, StaticEnv *r, bool tail)
+static Thunk *c_primitive_application(unsigned constant_index,
+		                      Value es, StaticEnv *r, bool tail)
 {
-#if 0
+	Primitive *prim = as_ref(v_ref(r->constants, constant_index));
 	unsigned i, argc = list_len(es);
-	Thunk *args[argc];
+	Thunk *t = t_new(16);
+
+	if (argc != prim->argc)
+		error("arity error\n");
 
 	for (i = 0; i < argc; i++) {
-		args[i] = compile(car(es), r, false);
+		t_merge(t, compile(car(es), r, false));
+		if (i < argc - 1)
+			op(t, VALUE_PUSH);
 		es = cdr(es);
 	}
-#endif
 
-	return NULL;
+	return i_primitive(constant_index, argc, t);
 }
 
 static Thunk *c_application(Value e, Value es, StaticEnv *r, bool tail)
@@ -930,9 +978,8 @@ static Thunk *c_application(Value e, Value es, StaticEnv *r, bool tail)
 		case KindGlobal:
 			return c_regular_application(e, es, r, tail);
 
-		case KindPredefined:
-			// FIXME: check the primitive is a function
-			return c_primitive_application(e, es, r, tail);
+		case KindConstant:
+			return c_primitive_application(k.i, es, r, tail);
 		}
 
 	} else if (is_cons(e) &&
@@ -953,6 +1000,7 @@ Thunk *compile(Value e, StaticEnv *r, bool tail)
 	if (is_cons(e)) {
 		if (is_type(SYMBOL, car(e))) {
 			String *s = as_ref(car(e));
+			// FIXME: use ptr comparison
 			if (!string_cmp_cstr(s, "quote"))
 				return c_quotation(cadr(e), r, tail);
 
@@ -994,9 +1042,8 @@ void print_constants_(Vector *cs)
 	}
 }
 
-Value eval(VM *vm, Value sexp)
+Value eval(StaticEnv *r, VM *vm, Value sexp)
 {
-	StaticEnv *r = r_alloc();
 	Thunk *t = compile(sexp, r, true);
 
 	printf("disassembly:\n");

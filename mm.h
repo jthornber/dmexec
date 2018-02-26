@@ -20,6 +20,7 @@ void mm_rm_root(Value *v);
 void mm_checkpoint();
 
 void *mm_alloc(ObjectType type, size_t s);
+void *mm_realloc(void *obj, size_t s);   // only for RAW types
 void *mm_zalloc(ObjectType type, size_t s);
 void *mm_clone(void *obj);
 

@@ -122,6 +122,17 @@ typedef struct {
 	HashEntry root;
 } HashTable;
 
+typedef struct {
+	const char *name;
+	unsigned argc;
+	union {
+		Value (*prim0)();
+		Value (*prim1)(Value);
+		Value (*prim2)(Value, Value);
+		Value (*prim3)(Value, Value, Value);
+	};
+} Primitive;
+
 //----------------------------------------------------------------
 
 #endif

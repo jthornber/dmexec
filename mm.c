@@ -339,6 +339,21 @@ void *mm_alloc(ObjectType type, size_t s)
 	return ptr;
 }
 
+void *mm_realloc(void *obj, size_t s)
+{
+	void *ptr;
+
+	if (get_obj_type(obj) != RAW)
+		error("only RAW data can be reallocated");
+
+	ptr = alloc_(RAW, s);
+	if (!ptr)
+		error("out of memory");
+
+	memcpy(ptr, obj, get_obj_size(obj));
+	return ptr;
+}
+
 void *mm_zalloc(ObjectType type, size_t s)
 {
 	void *ptr = mm_alloc(type, s);

@@ -1,7 +1,11 @@
 #include "hash_table.h"
 
+#include "cons.h"
 #include "equality.h"
+#include "error.h"
 #include "slab.h"
+#include "string_type.h"
+#include "vector.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -19,15 +23,65 @@ static uint32_t hash_u32(uint32_t n)
 	return GOLDEN_RATIO_32 * n;
 }
 
-static uint32_t hash_ptr(void *ptr)
+static uint32_t combine_hash(uint32_t h1, uint32_t h2)
 {
-	return hash_u32((uint32_t) ptr);
+	// FIXME: check this
+	return (GOLDEN_RATIO_32 * h1) ^ h2;
+}
+
+static uint32_t hash_(Value v)
+{
+	uint32_t h;
+
+	switch (get_type(v)) {
+	case STRING:
+		return string_hash(v.ptr);
+
+	case SYMBOL:
+		return string_hash(v.ptr) ^ 0b01010101;
+
+	case CONS:
+		return combine_hash(hash_(car(v)),
+				    hash_(cdr(v)));
+
+	case NIL:
+		return 0;
+
+	case VECTOR: {
+		// FIXME: horribly slow
+		unsigned size = v_size(v.ptr);
+		h = 0b10;
+		for (unsigned i = 0; i < size; i++)
+			h = combine_hash(h, hash_(v_ref(v.ptr, i)));
+		return h;
+	}
+
+	case VBLOCK:
+		assert(false);
+		return 0;
+
+	case FIXNUM:
+		return hash_u32(as_fixnum(v));
+
+	case PRIMITIVE:
+	case HTABLE:
+	case CLOSURE:
+	case HBLOCK:
+	case FRAME:
+	case STATIC_ENV:
+	case THUNK:
+	case RAW:
+	default:
+		error("can't hash this type");
+	}
+
+	// Never get here
+	return 0;
 }
 
 static uint32_t hash(Value v, unsigned level)
 {
-	assert(get_type(v) == FIXNUM);
-	return (hash_u32(as_fixnum(v)) >> (level * 4)) & 0xf;
+	return (hash_(v) >> (level * 4)) & 0xf;
 }
 
 //----------------------------------------------------------------
